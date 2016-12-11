@@ -1,24 +1,19 @@
-from pathlib import Path
+from ribosome import command, NvimStatePlugin, msg_command, NvimFacade
 
-import neovim
+from tubbs.main import Tubbs
 
 from amino import List
-
-from ribosome import (command, NvimStatePlugin, msg_command, json_msg_command,
-                    NvimFacade)
-
-from tubbs.plugins.core import StageI
-from tubbs.main import Tubbs
 from tubbs.logging import Logging
+from tubbs.plugins.core.message import AObj, StageI
 
 
 class TubbsNvimPlugin(NvimStatePlugin, Logging):
 
-    def __init__(self, vim: neovim.Nvim) -> None:
+    def __init__(self, vim) -> None:
         super().__init__(NvimFacade(vim, 'tubbs'))
         self.tubbs = None  # type: Tubbs
-        self._post_initialized = False
 
+    @property
     def state(self):
         return self.tubbs
 
@@ -35,24 +30,23 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
             self.tubbs.stop()
             self.tubbs = None
 
-    @command(sync=True)
-    def tubbs_start(self):
-        plugins = self.vim.pl('plugins') | List()
+    def start_plugin(self):
+        plugins = self.vim.vars.pl('plugins') | self._default_plugins
         self.tubbs = Tubbs(self.vim.proxy, plugins)
         self.tubbs.start()
         self.tubbs.wait_for_running()
         self.tubbs.send(StageI())
 
-    @command()
-    def tubbs_post_startup(self):
-        self._post_initialized = True
-        if self.tubbs is not None:
-            self.vim.set_pvar('started', True)
-        else:
-            self.log.error('tubbs startup failed')
+    @property
+    def _default_plugins(self):
+        return List()
 
-    @msg_command(A)
-    def tubbs_a_def(self):
+    @command(sync=True)
+    def tubbs_start(self):
+        return self.start_plugin()
+
+    @msg_command(AObj)
+    def tubbs_a(self):
         pass
 
 __all__ = ('TubbsNvimPlugin',)

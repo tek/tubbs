@@ -1,2 +1,4 @@
 hashes/*
 tubbs/parsers/scala.py
+unit/_temp
+integration/_temp

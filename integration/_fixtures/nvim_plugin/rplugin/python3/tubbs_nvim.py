@@ -9,10 +9,10 @@ import amino
 
 amino.development = True
 
-import tryp.logging
+import amino.logging
 
 logfile = Path(os.environ['TRYPNV_LOG_FILE'])
-tryp.logging.tryp_file_logging(level=logging.DEBUG,
+amino.logging.tryp_file_logging(level=logging.DEBUG,
                                handler_level=logging.DEBUG,
                                logfile=logfile)
 

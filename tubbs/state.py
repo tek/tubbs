@@ -1,30 +1,31 @@
-from ribosome import Machine, PluginStateMachine, NvimFacade
+from ribosome import Machine, NvimFacade, RootMachine
 from ribosome.nvim import HasNvim
-from ribosome.machine import ModularMachine, Transitions
+
+from ribosome.machine.state import SubMachine, SubTransitions
 
 from tubbs.logging import Logging
+from tubbs.env import Env
 
-from amino import List
 
+class TubbsComponent(SubMachine, HasNvim, Logging):
 
-class TubbsComponent(ModularMachine, HasNvim, Logging):
-
-    def __init__(self, name: str, vim: NvimFacade) -> None:
-        Machine.__init__(self, name)
+    def __init__(self, vim: NvimFacade, parent=None, title=None) -> None:
+        Machine.__init__(self, parent, title=title)
         HasNvim.__init__(self, vim)
 
 
-class TubbsState(PluginStateMachine, HasNvim, Logging):
+class TubbsState(RootMachine, Logging):
+    _data_type = Env
 
-    def __init__(self, vim: NvimFacade, plugins: List[str]) -> None:
-        HasNvim.__init__(self, vim)
-        PluginStateMachine.__init__(self, 'tubbs', plugins)
+    @property
+    def title(self):
+        return 'tubbs'
 
 
-class TubbsTransitions(Transitions, HasNvim):
+class TubbsTransitions(SubTransitions, HasNvim, Logging):
 
     def __init__(self, machine, *a, **kw):
-        Transitions.__init__(self, machine, *a, **kw)
+        SubTransitions.__init__(self, machine, *a, **kw)
         HasNvim.__init__(self, machine.vim)
 
 __all__ = ('TubbsComponent', 'TubbsState', 'TubbsTransitions')

@@ -1,18 +1,25 @@
-from trypnv.machine import may_handle
+from ribosome.machine import may_handle
+from ribosome.machine.base import io
+
+from amino import __
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
-from amino.lazy import lazy
-from tryp import Map
-from tubbs.plugins.core.message import StageI
+from tubbs.plugins.core.message import StageI, AObj
+
+
+class CoreTransitions(TubbsTransitions):
+
+    @may_handle(StageI)
+    def stage_i(self):
+        return io(__.vars.set_p('started', True))
+
+    @may_handle(AObj)
+    def a_obj(self):
+        pass
 
 
 class Plugin(TubbsComponent):
+    Transitions = CoreTransitions
 
-    class Transitions(TubbsTransitions):
-
-        @may_handle(StageI)
-        def stage_i(self):
-            pass
-
-__all__ = ('Plugin')
+__all__ = ('Plugin',)
