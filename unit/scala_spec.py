@@ -1,7 +1,7 @@
 from amino.test import Spec
 from amino import List, _, __
 
-from tubbs.grako.scala import parse, gen
+from tubbs.grako.scala import Parser
 
 funname = List.random_alpha(5)
 
@@ -33,33 +33,37 @@ class ScalaSpec(Spec):
 
     def setup(self):
         super().setup()
-        gen()
+        self._parser = Parser()
+        self._parser.gen()
+
+    def _parse(self, text, rule):
+        return self._parser.parse(text, rule)
 
     def fundef(self):
-        ast = parse(fundef, 'Def')
+        ast = self._parse(fundef, 'Def')
         (ast // __.lift(1) // _.sig // _.id).should.contain(funname)
 
     def incomplete_fundef(self):
-        ast = parse(incomplete_fundef, 'TemplateStat')
+        ast = self._parse(incomplete_fundef, 'TemplateStat')
         (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def fundecl(self):
-        parse(fundecl, 'FunDef').should.be.left
-        ast = parse(fundecl, 'TemplateStat')
+        self._parse(fundecl, 'FunDef').should.be.left
+        ast = self._parse(fundecl, 'TemplateStat')
         ast.should.be.right
         (ast // _.mod).should.contain(acc_mod)
         (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def funsig(self):
-        ast = parse(funsig, 'FunSig')
+        ast = self._parse(funsig, 'FunSig')
         (ast // _.id).should.contain(funname)
 
     def rettype(self):
-        ast = parse(rettype, 'Type')
+        ast = self._parse(rettype, 'Type')
         (ast // _.head // _.simple // _.id).should.contain(rettypeid)
 
     def typeargs(self):
-        ast = parse(typeargs, 'TypeArgs')
+        ast = self._parse(typeargs, 'TypeArgs')
         (ast // _.types | List()).should.have.length_of(2)
 
 __all__ = ('ScalaSpec',)
