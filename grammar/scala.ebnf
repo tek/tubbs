@@ -214,8 +214,8 @@ ConstrAnnotation = '@' RegularType ArgumentExprs;
 
 TemplateBody = [nl] '{' [SelfType] TemplateStat {semi TemplateStat} '}';
 TemplateStat = Import
-  |  {Annotation [nl]} {Modifier} Def
-  |  {Annotation [nl]} {Modifier} Dcl
+  |  {anno:Annotation [nl]} {mod:Modifier} def:Def
+  |  {anno:Annotation [nl]} {mod:Modifier} dcl:Dcl
   |  Expr;
 SelfType = id [':' Type] '=>'
   |  'this' ':' Type '=>';
@@ -225,10 +225,10 @@ ImportExpr = StableId '.' (id | '_' | ImportSelectors);
 ImportSelectors = '{' {ImportSelector ','} (ImportSelector | '_') '}';
 ImportSelector = id ['=>' id | '=>' '_'];
 
-Dcl = 'val' ValDcl
-  |  'var' VarDcl
-  |  'def' FunDcl
-  |  'type' {nl} TypeDcl;
+Dcl = key:'val' dcl:ValDcl
+  |  key:'var' dcl:VarDcl
+  |  key:'def' dcl:FunDcl
+  |  key:'type' {nl} dcl:TypeDcl;
 
 ValDcl = ids ':' Type;
 VarDcl = ids ':' Type;

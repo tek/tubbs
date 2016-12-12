@@ -14,12 +14,18 @@ rettypeid = 'ReturnType'
 
 rettype = '{}{}'.format(rettypeid, typeargs)
 
-fundecl = 'def {}(a: Int): Ret'.format(funname)
+acc_mod = 'protected'
+
+fundecl = '{} def {}(a: Int): Ret'.format(acc_mod, funname)
 
 fundef = '''def {}: {} = {{
     val a: Int = 1
     foo("asdf")
 }}
+'''.format(funsig, rettype)
+
+incomplete_fundef = '''def {}: {} = {{
+    val a: Int = 1
 '''.format(funsig, rettype)
 
 
@@ -30,24 +36,30 @@ class ScalaSpec(Spec):
         gen()
 
     def fundef(self):
-        res = parse(fundef, 'Def')
-        (res // __.lift(1) // _.sig // _.id).should.contain(funname)
+        ast = parse(fundef, 'Def')
+        (ast // __.lift(1) // _.sig // _.id).should.contain(funname)
+
+    def incomplete_fundef(self):
+        ast = parse(incomplete_fundef, 'TemplateStat')
+        (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def fundecl(self):
         parse(fundecl, 'FunDef').should.be.left
-        res = parse(fundef, 'Dcl')
-        (res // __.lift(1) // _.sig // _.id).should.contain(funname)
+        ast = parse(fundecl, 'TemplateStat')
+        ast.should.be.right
+        (ast // _.mod).should.contain(acc_mod)
+        (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def funsig(self):
-        res = parse(funsig, 'FunSig')
-        (res // _.id).should.contain(funname)
+        ast = parse(funsig, 'FunSig')
+        (ast // _.id).should.contain(funname)
 
     def rettype(self):
-        res = parse(rettype, 'Type')
-        (res // _.head // _.simple // _.id).should.contain(rettypeid)
+        ast = parse(rettype, 'Type')
+        (ast // _.head // _.simple // _.id).should.contain(rettypeid)
 
     def typeargs(self):
-        res = parse(typeargs, 'TypeArgs')
-        (res // _.types | List()).should.have.length_of(2)
+        ast = parse(typeargs, 'TypeArgs')
+        (ast // _.types | List()).should.have.length_of(2)
 
 __all__ = ('ScalaSpec',)
