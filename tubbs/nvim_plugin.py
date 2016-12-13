@@ -4,7 +4,7 @@ from tubbs.main import Tubbs
 
 from amino import List
 from tubbs.logging import Logging
-from tubbs.plugins.core.message import AObj, StageI
+from tubbs.plugins.core.message import AObj, StageI, AObjRule, IObj, IObjRule
 
 
 class TubbsNvimPlugin(NvimStatePlugin, Logging):
@@ -47,6 +47,18 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
 
     @msg_command(AObj)
     def tubbs_a(self):
+        pass
+
+    @msg_command(IObj)
+    def tubbs_i(self):
+        pass
+
+    @msg_command(AObjRule)
+    def tubbs_a_rule(self):
+        pass
+
+    @msg_command(IObjRule)
+    def tubbs_i_rule(self):
         pass
 
 __all__ = ('TubbsNvimPlugin',)

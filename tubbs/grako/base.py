@@ -4,8 +4,10 @@ import abc
 from grako import gencode
 from grako.ast import AST
 
-from amino import Either, Try, List, Map, L, Path, _
+from amino import Either, Try, List, Map, L, Path, _, Right
 from amino.util.string import camelcaseify
+
+from ribosome.record import Record, map_field
 
 
 def flatten(ast):
@@ -21,6 +23,15 @@ def filter_empty(l):
 
 
 class AstMap(AST, Map):
+
+    @staticmethod
+    def from_ast(ast: AST):
+        a = AstMap()
+        a.update(**ast)
+        a._order = ast._order
+        a._parseinfo = ast._parseinfo
+        a._closed = ast._closed
+        return a
 
     def __getattr__(self, key):
         return self.lift(key) / to_list
@@ -40,7 +51,7 @@ class DataSemantics:
             if isinstance(ast, str) else
             filter_empty(ast)
             if isinstance(ast, list) else
-            AstMap(ast)
+            AstMap.from_ast(ast)
             if isinstance(ast, dict) else
             ast
         )
@@ -139,5 +150,28 @@ class BuiltinParser(ParserBase):
     @property
     def parser_path(self):
         return self.parsers_path / '{}.py'.format(self.name)
+
+
+class Parsers(Record):
+    parsers = map_field()
+
+    @property
+    def _builtin_mod(self):
+        return 'tubbs.grako'
+
+    def load(self, name):
+        return Right(self) if name in self.parsers else self._load(name)
+
+    def _load(self, name):
+        def update(parser):
+            return self.modder.parsers(_ + (name, parser()))
+        return (
+            Either.import_name('{}.{}'.format(
+                self._builtin_mod, name), 'Parser') /
+            update
+        )
+
+    def parser(self, name):
+        return self.parsers.lift(name)
 
 __all__ = ('ParserBase',)
