@@ -1,4 +1,5 @@
 from ribosome import command, NvimStatePlugin, msg_command, NvimFacade
+from ribosome.request import msg_function
 
 from tubbs.main import Tubbs
 
@@ -45,20 +46,20 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
     def tubbs_start(self):
         return self.start_plugin()
 
-    @msg_command(AObj)
-    def tubbs_a(self):
+    @msg_function(AObj, sync=True)
+    def tub_a(self):
         pass
 
     @msg_command(IObj)
-    def tubbs_i(self):
+    def tub_i(self):
         pass
 
     @msg_command(AObjRule)
-    def tubbs_a_rule(self):
+    def tub_a_rule(self):
         pass
 
     @msg_command(IObjRule)
-    def tubbs_i_rule(self):
+    def tub_i_rule(self):
         pass
 
 __all__ = ('TubbsNvimPlugin',)

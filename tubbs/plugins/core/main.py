@@ -25,7 +25,7 @@ class CoreTransitions(TubbsTransitions):
                     Right(Select(name, tpe, ident)))
         return (
             self.vim.vars.p('parser')
-            .o(lambda: self.vim.opts('filetype')) //
+            .o(lambda: self.vim.buffer.options('filetype')) //
             load
         ).lmap(Fatal)
 

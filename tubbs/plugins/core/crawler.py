@@ -63,10 +63,10 @@ class Crawler(Logging):
         self.parser = parser
         self.hints = hints
 
-    def find(self, ident) -> Match:
+    def find(self, ident, linewise=True) -> Match:
         return (
             (self.hints // __.find(self.vim, ident))
-            .o(lambda: self._default_start(ident)) //
+            .o(L(self._default_start)(ident)) //
             L(self._parse)(ident, _)
         )
 

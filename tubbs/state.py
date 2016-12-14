@@ -1,7 +1,8 @@
-from ribosome import Machine, NvimFacade, RootMachine
+from ribosome import Machine, NvimFacade
 from ribosome.nvim import HasNvim
 
-from ribosome.machine.state import SubMachine, SubTransitions
+from ribosome.machine.state import (SubMachine, SubTransitions,
+                                    UnloopedRootMachine)
 
 from tubbs.logging import Logging
 from tubbs.env import Env
@@ -14,7 +15,7 @@ class TubbsComponent(SubMachine, HasNvim, Logging):
         HasNvim.__init__(self, vim)
 
 
-class TubbsState(RootMachine, Logging):
+class TubbsState(UnloopedRootMachine, Logging):
     _data_type = Env
 
     @property
