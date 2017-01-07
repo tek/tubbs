@@ -28,6 +28,16 @@ incomplete_fundef = '''def {}: {} = {{
     val a: Int = 1
 '''.format(funsig, rettype)
 
+caseclause = 'case a: Type => b'
+
+caseclauses = '''{}
+case a => b
+'''.format(caseclause)
+
+patmat = '''a match {{
+{}
+}}'''.format(caseclauses)
+
 
 class ScalaSpec(Spec):
 
@@ -39,31 +49,51 @@ class ScalaSpec(Spec):
     def _parse(self, text, rule):
         return self._parser.parse(text, rule)
 
+    def _ast(self, text, rule):
+        res = self._parse(text, rule)
+        res.should.be.right
+        return res.value
+
     def fundef(self):
-        ast = self._parse(fundef, 'Def')
-        (ast // __.lift(1) // _.sig // _.id).should.contain(funname)
+        ast = self._ast(fundef, 'def')
+        (ast.lift(1) // _.sig // _.id).should.contain(funname)
 
     def incomplete_fundef(self):
-        ast = self._parse(incomplete_fundef, 'TemplateStat')
-        (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
+        ast = self._ast(incomplete_fundef, 'templateStat')
+        (ast.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def fundecl(self):
-        self._parse(fundecl, 'FunDef').should.be.left
-        ast = self._parse(fundecl, 'TemplateStat')
-        ast.should.be.right
-        (ast // _.mod).should.contain(acc_mod)
-        (ast // _.dcl // _.dcl // _.sig // _.id).should.contain(funname)
+        self._parse(fundecl, 'funDef').should.be.left
+        ast = self._ast(fundecl, 'templateStat')
+        ast.mod.should.contain(acc_mod)
+        (ast.dcl // _.dcl // _.sig // _.id).should.contain(funname)
 
     def funsig(self):
-        ast = self._parse(funsig, 'FunSig')
-        (ast // _.id).should.contain(funname)
+        ast = self._ast(funsig, 'funSig')
+        ast.id.should.contain(funname)
 
     def rettype(self):
-        ast = self._parse(rettype, 'Type')
-        (ast // _.head // _.simple // _.id).should.contain(rettypeid)
+        ast = self._ast(rettype, 'type')
+        (ast.head // _.simple // _.id).should.contain(rettypeid)
 
     def typeargs(self):
-        ast = self._parse(typeargs, 'TypeArgs')
-        (ast // _.types | List()).should.have.length_of(2)
+        ast = self._ast(typeargs, 'typeArgs')
+        (ast.types | List()).should.have.length_of(2)
+
+    def pattern(self):
+        ast = self._ast('a: Type', 'pattern')
+        (ast.last // _.id).should.contain('Type')
+
+    def caseclause(self):
+        ast = self._ast(caseclause, 'caseClause')
+        ast.block.should.contain(List('b'))
+
+    def caseclauses(self):
+        ast = self._ast(caseclauses, 'caseClauses')
+        (ast.cases // _.last // _.block).should.contain(List('b'))
+
+    def patmat(self):
+        ast = self._ast(patmat, 'patMat')
+        (ast.cases // _.cases // _.last // _.block).should.contain(List('b'))
 
 __all__ = ('ScalaSpec',)
