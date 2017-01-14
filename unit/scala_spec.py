@@ -2,6 +2,7 @@ from amino.test import Spec
 from amino import List, _, __
 
 from tubbs.grako.scala import Parser
+from tubbs.grako.ast_map import SubAstValid
 
 funname = List.random_alpha(5)
 
@@ -28,15 +29,30 @@ incomplete_fundef = '''def {}: {} = {{
     val a: Int = 1
 '''.format(funsig, rettype)
 
-caseclause = 'case a: Type => b'
+caseclause = 'case a: Type => 1'
 
 caseclauses = '''{}
-case a => b
-'''.format(caseclause)
+case _ => 3'''.format(caseclause)
 
 patmat = '''a match {{
 {}
 }}'''.format(caseclauses)
+
+patmatAssign = 'val b = {}'.format(patmat)
+
+resulttype = '''def foo = {{
+{}
+new Cls(b)
+}}'''.format(patmatAssign)
+
+valVarDef = 'val a = 1'
+
+block = '''{}
+val b = 2'''.format(valVarDef)
+
+blockExpr = '''{{
+{}
+}}'''.format(block)
 
 
 class ScalaSpec(Spec):
@@ -53,6 +69,11 @@ class ScalaSpec(Spec):
         res = self._parse(text, rule)
         res.should.be.right
         return res.value
+
+    def blockExprApplyStrLit(self):
+        word = List.random_string()
+        ast = self._ast('{{foo("{}")}}'.format(word), 'simpleBlockExpr')
+        ast.block.first[1][0][1].data.m.should.contain(list(word))
 
     def fundef(self):
         ast = self._ast(fundef, 'def')
@@ -86,14 +107,39 @@ class ScalaSpec(Spec):
 
     def caseclause(self):
         ast = self._ast(caseclause, 'caseClause')
-        ast.block.should.contain(List('b'))
+        ast.block.should.contain(List('1'))
 
     def caseclauses(self):
         ast = self._ast(caseclauses, 'caseClauses')
-        (ast.cases // _.last // _.block).should.contain(List('b'))
+        (ast.cases // _.last // _.block).should.contain(List('3'))
 
     def patmat(self):
         ast = self._ast(patmat, 'patMat')
-        (ast.cases // _.cases // _.last // _.block).should.contain(List('b'))
+        (ast.cases // _.cases // _.last // _.block).should.contain(List('3'))
+
+    def patmat_assign(self):
+        ast = self._ast(patmatAssign, 'patVarDef')
+        block = ast.def_ // _.rhs // _.cases // _.cases // _.last // _.block
+        (block // _.stats).should.contain(List(List('3')))
+
+    def result_type(self):
+        ast = self._ast(resulttype, 'def')
+
+    def valVarDef(self):
+        ast = self._ast(valVarDef, 'valVarDef')
+        (ast.def_ // _.rhs // _.head).should.contain('1')
+
+    def blockStat(self):
+        ast = self._ast(valVarDef, 'blockStat')
+        (ast.head // _.def_ // _.rhs // _.head).should.contain('1')
+
+    def block(self):
+        ast = self._ast(block, 'block')
+        (ast.first // _.head // _.def_ // _.rhs // _.head).should.contain('1')
+
+    def blockExpr(self):
+        ast = self._ast(blockExpr, 'blockExpr')
+        (ast.block // _.first // _.head // _.def_ // _.rhs // _.head
+         ).should.contain('1')
 
 __all__ = ('ScalaSpec',)

@@ -1,5 +1,7 @@
+@@whitespace :: / +/
 @@keyword :: case match lazy val var override def implicit object class trait
-@@keyword :: import package
+@@keyword :: import package super
+# @@keyword :: null this
 
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
@@ -12,15 +14,10 @@ paren = '(' | ')' | '[' | ']' | '{' | '}';
 delim = '`' | "'" | '"' | '.' | ';' | ',';
 wildcard = '_';
 arrow = '=>';
+projectOp = '#';
 Opchar = (!(whiteSpace | Upper | Lower | Letter | Digit | paren | delim)) PrintableChar;
 PrintableChar = /[\u0020-\u007F]/;
 CharEscapeSeq = '\' ('b' | 't' | 'n' | 'f' | 'r' | '"' | "'" | '\');
-
-@name op = {Opchar}+;
-@name varid = (Lower IdRest);
-@name plainid = !arrow ((Upper IdRest) | varid | op);
-@name id = plainid | '`' stringLiteral '`';
-IdRest = {Letter | Digit} ['_' op];
 
 booleanLiteral = 'true' | 'false';
 integerLiteral = (decimalNumeral | hexNumeral) ['L' | 'l'];
@@ -41,18 +38,27 @@ CharNoDoubleQuote = !'"' PrintableChar;
 CharNoDoubleQuoteOrNewline = !(nl | '"') PrintableChar;
 characterLiteral = "'" (CharNoQuoteOrNewline | UnicodeEscape | CharEscapeSeq) "'";
 
-stringLiteral = '"' {StringElement} '"'
-  | '"""' multiLineChars '"""';
 StringElement = CharNoDoubleQuoteOrNewline
   | UnicodeEscape
   | CharEscapeSeq;
+stringLiteralData = {StringElement};
+singleLineStringLiteral = lquote:'"' data:stringLiteralData rquote:'"';
 multiLineChars = {['"'] ['"'] CharNoDoubleQuote} {'"'};
+multiLineStringLiteral = lquote:'"""' data:multiLineChars rquote:'"""';
+stringLiteral =
+  | singleLineStringLiteral
+  | multiLineStringLiteral
+  ;
 
 symbolLiteral = "'" plainid;
 comment = '/*' /./ '*/'
   | '//' /./;
-nl = '\n';
-eol = ';' | {nl}+;
+nl = {'\n'}+;
+eol = ';' | nl;
+
+@name op = !arrow op:{Opchar}+;
+@name plainid = id:/[A-Z$_a-z][A-Z$_a-z0-9]*/ [wildcard {Opchar}+];
+@name id = id:(plainid | op | '`' stringLiteralData '`');
 
 case = 'case';
 match = 'match';
@@ -62,41 +68,52 @@ literal = ['-'] integerLiteral
   | ['-'] floatingPointLiteral
   | booleanLiteral
   | characterLiteral
+  | 'null'
   | stringLiteral
   | symbolLiteral
-  | 'null';
+  ;
 
 qualId = id {'.' id};
 ids = id {',' id};
 
-path = stableId
-  | [id '.'] 'this';
-stableId = id
-  | path '.' id
-  | [id '.'] 'super' [classQualifier] '.' id;
 classQualifier = '[' id ']';
+superAttr = [id '.'] 'super' [classQualifier] '.' id;
+select = path '.' id;
+@name stableId =
+  | superAttr
+  | select
+  | id
+  ;
+thisRef = [id '.'] 'this';
+path =
+  | stableId
+  | thisRef
+  ;
 
 functionArgTypes = infixType
   | '(' [ paramType {',' paramType } ] ')';
 existentialClause = 'forSome' '{' existentialDcl {eol existentialDcl} '}';
 existentialDcl = typekw typeDcl
   | 'val' valDcl;
-simpleType = regularType '#' id
+typeProjection = regularType projectOp id;
+simpleType = typeProjection
   | path '.' typekw
   | '(' types ')'
   | id:stableId;
-typeArgs = '[' types:types ']';
+typeArgs = lbrack:'[' types:types rbrack:']';
 types = type {',' type};
 refinement = [nl] '{' refineStat {eol refineStat} '}';
 refineStat = dcl
-  | typekw typeDef;
+  | typeDef;
 appliedType = simple:simpleType args:typeArgs;
 regularType = appliedType
   |simpleType;
 annotType = regularType {annotation};
-compoundType = annotType {'with' annotType} [refinement]
+compoundType1 = compoundpre:annotType compound:{'with' annotType} [refine:refinement];
+compoundType = compoundType1
   | refinement;
-infixType = compoundType {id [nl] compoundType};
+infixTypeRest = infix:id [nl:nl] rhs:compoundType;
+infixType = infixhead:compoundType infixtail:{infixTypeRest};
 functionType = functionArgTypes arrow type;
 infixExistentialType = infixType [existentialClause];
 type =
@@ -105,104 +122,133 @@ type =
 
 ascription = ':' infixType
   | ':' annotation {annotation}
-  | ':' '_' '*';
+  | ':' wildcard '*';
 
-@name
-expr = (bindings | ['implicit'] id | '_') arrow expr
-  | expr1;
-@name
-expr1 = 'if' '(' expr ')' {nl} expr [[eol] 'else' expr]
+patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:'{' cases:caseClauses rbrace:'}';
+
+@name postfixExpr = infixExpr id eol;
+@name infixExpr = infixExpr id [nl] infixExpr;
+prefixOperator = '-' | '+' | '~' | '!';
+prefixExpr = prefix:prefixOperator expr:simpleExpr;
+argumentExprs =
+  | '(' [exprs ','] simpleOrCompoundExpr ':' wildcard '*' ')'
+  | '(' [exprs] ')'
+  | [nl] blockExpr
+  ;
+# accidentally deleted its usage
+assignExpr =
+  | [simpleExpr '.'] id '=' expr
+  | simpleExpr1 argumentExprs '=' expr
+  ;
+simpleApplyExprPre =
+  | literal
+  | wildcard
+  | '(' [exprs] ')'
+  | simpleExpr typeArgs
+  | path
+  | simpleExprAttr
+  ;
+simpleApplyExpr = simpleApplyExprPre {argumentExprs}+;
+simpleExprAttr = simpleExpr '.' id;
+simpleExpr1 =
+  | literal
+  | wildcard
+  | '(' [exprs] ')'
+  | simpleExpr typeArgs
+  | simpleApplyExpr
+  | path
+  | simpleExprAttr
+  ;
+classInstantiation = new:'new' templ:(classTemplate | templateBody);
+etaExpansion = simpleExpr1 wildcard;
+@name simpleExpr =
+  | classInstantiation
+  | blockExpr
+  | etaExpansion
+  | simpleExpr1
+  ;
+@name simpleOrCompoundExpr =
+  | prefixExpr
+  | infixExpr
+  | postfixExpr
+  | simpleExpr
+  ;
+
+@name expr =
+  | arrow arrow arrow
+  | (bindings | ['implicit'] id | wildcard) arrow expr
+  | expr1
+  ;
+@name expr1 =
+  | 'if' '(' expr ')' {nl} expr [[eol] 'else' expr]
   | 'while' '(' expr ')' {nl} expr
   | 'try' ('{' block '}' | expr) ['catch' '{' caseClauses '}'] ['finally' expr]
   | 'do' expr [eol] 'while' '(' expr ')'
   | 'for' ('(' enumerators ')' | '{' enumerators '}') {nl} ['yield'] expr
   | 'throw' expr
   | 'return' [expr]
-  | [simpleExpr '.'] id ' = ' expr
-  | simpleExpr2 argumentExprs ' = ' expr
-  | postfixExpr
-  | postfixExpr ascription
-  | patMat;
-
-patMat = scrutinee:postfixExpr match:match lbrace:'{' cases:caseClauses rbrace:'}';
-
-# @name postfixExpr = infixExpr [id eol];
-@name postfixExpr = infixExpr;
-@name infixExpr = infixExpr1;
-@name infixExpr1 = prefixExpr
-  | infixExpr1 id [nl] infixExpr1;
-prefixExpr = ['-' | '+' | '~' | '!'] simpleExpr;
-@name simpleExpr = simpleExpr1;
-simpleExpr1 = 'new' (classTemplate | templateBody)
-  | blockExpr
-  | simpleExpr2 ['_'];
-simpleExpr2 = literal
-  | path
-  | '_'
-  | '(' [exprs] ')'
-  | simpleExpr '.' id
-  | simpleExpr typeArgs
-  | simpleExpr2 argumentExprs;
+  | patMat
+  | simpleOrCompoundExpr
+  | simpleOrCompoundExpr ascription
+  ;
 exprs = expr {',' expr};
-argumentExprs = '(' [exprs] ')'
-  | '(' [exprs ','] postfixExpr ':' '_' '*' ')'
-  | [nl] blockExpr;
-blockExpr = '{' caseClauses '}'
-  | '{' block '}';
-block = blockStat { eol blockStat } [resultExpr];
-@name blockStat = blockStat1;
-blockStat1 = import
-  | {annotation} ['implicit' | 'lazy'] def
-  | {annotation} {localModifier} tmplDef
-  | expr1;
-resultExpr = expr1
-  | (bindings | (['implicit'] id | '_') ':' compoundType) arrow block;
 
 enumerators = generator {eol generator};
 generator = pattern1 '<-' expr {[eol] guard | eol pattern1 '=' expr};
 
-simplePattern = '_'
-  | varid
+simplePattern = wildcard
+  | plainid
   | literal
   | stableId
   | stableId '(' [patterns] ')'
-  | stableId '(' [patterns ','] [varid '@'] '_*)'
+  | stableId '(' [patterns ','] [plainid '@'] '_*)'
   | '(' [patterns] ')';
 pattern3 = simplePattern
   | simplePattern { id [nl] simplePattern };
-pattern2 = varid ['@' pattern3]
+pattern2 = plainid ['@' pattern3]
   | pattern3;
 # cannot use `type` here, as it breaks case clauses by interpreting the arrow
 # as part of a function type
 pattern1 =
-  | (varid | wildcard) ':' (infixExistentialType | functionType)
+  | (plainid | wildcard) ':' (infixExistentialType | functionType)
   | pattern2;
 pattern = pattern1 { '|' pattern1 };
 patterns = pattern [',' patterns]
   | '_*';
 
-guard = 'if' postfixExpr;
+guard = 'if' simpleOrCompoundExpr;
 caseClause = start:case pat:pattern [guard:guard] arr:arrow block:block;
-caseClauses = cases:{ caseClause }+;
+caseClauses = cases:{caseClause}+;
 
+typeParam = id:(id | wildcard) [sub:typeParamClause]
+[b:tpLowerBound] [ub:tpUpperBound] vbs:{tpViewBound} cbs:{tpContextBound};
 typeParamClause = '[' variantTypeParam {',' variantTypeParam} ']';
-funTypeParamClause = '[' params:(typeParam {',' typeParam}) ']';
+typeParams = typeParam {',' typeParam};
+funTypeParamClause = lbrack:'[' params:typeParams rbrack:']';
 variantTypeParam = {annotation} ['+' | '-'] typeParam;
-typeParam = (id | '_') [typeParamClause] ['>:' type] ['<:' type] {'<%' type} {':' type};
-paramClauses = {params:paramClause} [[nl] implicits:implicitParamClause];
-paramClause = [nl] start:'(' !'implicit' [params] ')';
-implicitParamClause = start:'(' 'implicit' params ')';
+tpLowerBound = '>:' type;
+tpUpperBound = '<:' type;
+tpViewBound = '<%' type;
+tpContextBound = ':' type;
+
+paramClauses = {params:paramClause}+ [implicits:implicitParamClause];
+paramClause = [nl] lpar:'(' !'implicit' [params:params] rpar:')';
+implicitParamClause = lpar:'(' implicitkw:'implicit' params:params rpar:')';
 params = param {',' param};
-param = {annotation} id [':' paramType] ['=' expr];
-paramType = type
-  | arrow type
-  | type '*';
+param = {anno:annotation} id:id [colon:':' tpe:paramType] [assign:'='
+rhs:expr];
+paramTypeLazy = arrow type;
+paramTypeVariant = type '*';
+paramType =
+  | type
+  | paramTypeLazy
+  | paramTypeVariant;
 classParamClauses = {classParamClause} [[nl] '(' 'implicit' classParams ')'];
 classParamClause = [nl] '(' [classParams] ')';
 classParams = classParam {',' classParam};
 classParam = {annotation} {modifier} [('val' | 'var')] id ':' paramType [' = ' expr];
 bindings = '(' binding {',' binding} ')';
-binding = (id | '_') [':' type];
+binding = (id | wildcard) [':' type];
 
 modifier = localModifier
   | accessModifier
@@ -219,43 +265,77 @@ annotation = '@' regularType {argumentExprs};
 constrAnnotation = '@' regularType argumentExprs;
 
 templateBody = [nl] '{' [selfType] templateStat {eol templateStat} '}';
+templateStatDef = {anno:annotation [nl]} {mod:modifier} def:def;
+templateStatDcl = {anno:annotation [nl]} {mod:modifier} dcl:dcl;
 templateStat =
   | import
-  | {anno:annotation [nl]} {mod:modifier} def:def
-  | {anno:annotation [nl]} {mod:modifier} dcl:dcl
+  | templateStatDef
+  | templateStatDcl
   | expr;
 selfType = id [':' type] arrow
   | 'this' ':' type arrow;
 
 import = 'import' importExpr {',' importExpr};
-importExpr = stableId '.' (id | '_' | importSelectors);
-importSelectors = '{' {importSelector ','} (importSelector | '_') '}';
-importSelector = id [arrow id | arrow '_'];
+importExpr = stableId '.' (id | wildcard | importSelectors);
+importSelectors = '{' {importSelector ','} (importSelector | wildcard) '}';
+importSelector = id [arrow id | arrow wildcard];
 
 dcl = key:'val' dcl:valDcl
-  | key:'var' dcl:varDcl
+  | key:'var' dcl:valDcl
   | key:'def' dcl:funDcl
   | key:typekw {nl} dcl:typeDcl;
 
 valDcl = ids ':' type;
-varDcl = ids ':' type;
 funDcl = sig:funSig [':' type:type];
-funSig = id:id [tparams:funTypeParamClause] paramss:paramClauses;
 typeDcl = id [typeParamClause] ['>:' type] ['<:' type];
 
-patVarDef = 'val' patDef
-  | 'var' varDef;
-def = patVarDef
-  | 'def' funDef
-  | typekw {nl} typeDef
-  | tmplDef;
-patDef = pattern2 {',' pattern2} [':' type] '=' expr;
+patDef = pats:(pattern2 {',' pattern2}) [colon:':' tpe:type] assign:'=' rhs:expr;
 varDef = patDef
-  | ids ':' type ' = ' '_';
-funDef = sig:funSig [':' type:type] '=' rhs:expr
-  | sig:funSig [nl] '{' rhs:block '}'
-  | 'this' paramClause paramClauses (' = ' constrExpr | [nl] constrBlock);
-typeDef = id [typeParamClause] '=' type;
+  | ids ':' type '=' wildcard;
+
+funSig = id:id [tparams:funTypeParamClause] [paramss:paramClauses];
+funDefFull = sig:funSig [':' type:type] '=' rhs:expr;
+funDefUnit = sig:funSig [nl] '{' rhs:block '}';
+funDefCtor = 'this' paramClauses (' = ' constrExpr | [nl] constrBlock);
+funDef1 =
+  | funDefFull
+  | funDefUnit
+  | funDefCtor
+  ;
+funDef = defkw:'def' def:funDef1;
+
+typeDef = typekw:typekw nls:{nl} id:id [params:typeParamClause] assign:'=' rhs:type;
+valVarDef = val:'val' def:patDef;
+varVarDef = var:'var' def:varDef;
+patVarDef =
+  | valVarDef
+  | varVarDef
+  ;
+def =
+  | patVarDef
+  | funDef
+  | typeDef
+  | tmplDef
+  ;
+
+resultExpr = expr1
+  | (bindings | (['implicit'] id | wildcard) ':' compoundType) arrow block;
+blockStatDef = {annotation} ['implicit' | 'lazy'] def;
+blockStatTemplDef = {annotation} {localModifier} tmplDef;
+# remove @name
+@name blockStat =
+  | import
+  | blockStatDef
+  | blockStatTemplDef
+  | expr1
+  ;
+# ???
+# block = first:blockStat rest:{ eol blockStat } [result:resultExpr];
+block = first:blockStat rest:{ eol blockStat };
+ccBlockExpr = lbrace:'{' [nl] cases:caseClauses [nl] rbrace:'}';
+simpleBlockExpr = lbrace:'{' [nl] block:block [nl] rbrace:'}';
+blockExpr = ccBlockExpr
+  | simpleBlockExpr;
 
 tmplDef = [case] 'class' classDef
   | [case] 'object' objectDef
