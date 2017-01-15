@@ -2,7 +2,7 @@ import hashlib
 import abc
 
 from grako import gencode
-from grako.exceptions import FailedToken
+from grako.exceptions import FailedToken, FailedKeywordSemantics
 from grako.parsing import Parser as GrakoParser
 from grako.ast import AST
 
@@ -13,16 +13,9 @@ from amino.func import dispatch
 
 from ribosome.record import Record, map_field
 
-from tubbs.grako.ast import to_list, AstMap, AstToken, AstList
+from tubbs.grako.ast import AstMap, AstToken, AstList
 from tubbs.logging import Logging
-
-
-def flatten(ast):
-    return ast if isinstance(ast, str) else ''.join(map(flatten, ast))
-
-
-def filter_empty(l):
-    return [a for a in l if not (isinstance(a, list) and not a)]
+from tubbs.formatter.tree import flatten_list  # type: ignore
 
 
 class PostProc:
@@ -38,7 +31,7 @@ class PostProc:
         return AstToken(raw=raw, rule=rule, pos=pos)
 
     def wrap_list(self, raw, rule, pos):
-        return AstList(raw, rule, pos)
+        return AstList(flatten_list(raw), rule, pos)
 
     def wrap_ast_map(self, ast, rule, pos):
         return ast
@@ -55,8 +48,9 @@ class DataSemantics(Logging):
         return handler(ast)
 
     def _special_token(self, ast):
-        raw = (ast / _.raw).mk_string()
-        return AstToken(raw=raw, rule=ast.rule, pos=ast.pos)
+        return (flatten_list(ast) / _.raw).mk_string()
+        # ref = ast if isinstance(ast, AstElem) else ast[0]
+        # return AstToken(raw=raw, rule=ref.rule, pos=ref.pos)
 
     def _no_special(self, name, ast):
         self.log.error('no handler for argument `{}` and {}'.format(name, ast))
@@ -64,7 +58,13 @@ class DataSemantics(Logging):
 
     def _default(self, ast, *a, **kw):
         ast1 = List.wrap(a).head / L(self._special)(ast, _) | ast
-        return AstMap.from_ast(ast1) if isinstance(ast1, AST) else ast1
+        return (
+            AstMap.from_ast(ast1)
+            if isinstance(ast1, AST) else
+            # flatten_list(ast1)
+            # if isinstance(ast1, list) else
+            ast1
+        )
 
 
 class ParserMixin(GrakoParser):
@@ -94,26 +94,39 @@ class ParserMixin(GrakoParser):
 
     def _call(self, rule, name, params, kwparams):
         self._last_pos = pos = self._pos
-        ret = GrakoParser._call(self, rule, name, params, kwparams)
-        return self._wrap_data(ret, name, pos)
+        result = GrakoParser._call(self, rule, name, params, kwparams)
+        wrapped = self._wrap_data(result, name, pos)
+        self._last_result = wrapped
+        return wrapped
 
-    def _wrap_str(self, raw, rule, pos):
-        return AstToken(raw=raw, rule=rule, pos=pos)
-
-    def _wrap_list(self, raw, rule, pos):
-        return AstList(raw, rule, pos)
-
-    def _wrap_dict(self, ast, rule, pos):
-        if not isinstance(ast, AstMap):
-            raise Exception('invalid ast map: {}'.format(ast))
-        return ast
-
-    def _wrap_ast_token(self, token, rule, pos):
-        return token
+    def _check_name(self):
+        name = str(self._last_result)
+        if self.ignorecase or self._buffer.ignorecase:
+            name = name.upper()
+        if name in self.keywords:
+            raise FailedKeywordSemantics('"%s" is a reserved word' % name)
 
     def _add_cst_node(self, node):
         wrapped = self._wrap_data(node, self._last_rule, self._last_pos)
         return super()._add_cst_node(wrapped)
+
+    def _wrap_closure(self, cb, block, sep=None, prefix=None):
+        pos = self._last_pos
+        rule = self._last_rule
+        result = cb(self, block, sep, prefix)
+        flat = flatten_list(result)
+        return AstList(flat, rule, pos)
+
+    def _closure(self, block, sep=None, prefix=None):
+        return self._wrap_closure(GrakoParser._closure, block, sep, prefix)
+
+    def _positive_closure(self, block, sep=None, prefix=None):
+        return self._wrap_closure(GrakoParser._positive_closure, block, sep,
+                                  prefix)
+
+    def _empty_closure(self):
+        cb = lambda self, a, b, c: super()._empty_closure()
+        return self._wrap_closure(cb, None, None, None)
 
 
 class ParserBase(abc.ABC):
@@ -192,8 +205,7 @@ class ParserBase(abc.ABC):
     def parse(self, text: str, rule: str):
         return (
             self.parser //
-            L(Try)(_.parse, text, rule, semantics=self.semantics) /
-            to_list
+            L(Try)(_.parse, text, rule, semantics=self.semantics)
         )
 
 

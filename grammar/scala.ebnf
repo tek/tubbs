@@ -16,6 +16,7 @@ Digit = /\d/;
 paren = '(' | ')' | '[' | ']' | '{' | '}';
 delim = '`' | "'" | '"' | '.' | ';' | ',';
 wildcard = '_';
+Wildcard = '_';
 arrow = '=>';
 projectOp = '#';
 Opchar = (!(whiteSpace | Upper | Lower | Letter | Digit | paren | delim)) PrintableChar;
@@ -58,9 +59,13 @@ symbolLiteral = "'" plainid;
 comment = '/*' /./ '*/'
   | '//' /./;
 
-@name op = !arrow op:{Opchar}+;
-@name plainid = id:/[A-Z$_a-z][A-Z$_a-z0-9]*/ [wildcard {Opchar}+];
-@name id = id:(plainid | op | '`' stringLiteralData '`');
+op = !arrow op:{Opchar}+;
+# @name plainid = /[A-Z$_a-z][A-Z$_a-z0-9]*/;
+plainid1(token) = Letter {Letter | Digit};
+@name plainid = plainid1;
+idOpSuffix = plainid Wildcard {Opchar}+;
+quotedId = '`' stringLiteralData '`';
+id = idOpSuffix | plainid | op | quotedId;
 
 case = 'case';
 match = 'match';
@@ -126,7 +131,8 @@ ascription = ':' infixType
   | ':' annotation {annotation}
   | ':' wildcard '*';
 
-patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:'{' cases:caseClauses rbrace:'}';
+patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:'{' [nl]
+cases:caseClauses [nl] rbrace:'}';
 
 @name postfixExpr = infixExpr id eol;
 @name infixExpr = infixExpr id [nl] infixExpr;
@@ -177,7 +183,6 @@ etaExpansion = simpleExpr1 wildcard;
   ;
 
 @name expr =
-  | arrow arrow arrow
   | (bindings | ['implicit'] id | wildcard) arrow expr
   | expr1
   ;
@@ -220,7 +225,8 @@ patterns = pattern [',' patterns]
 
 guard = 'if' simpleOrCompoundExpr;
 caseClause = start:case pat:pattern [guard:guard] arr:arrow block:block;
-caseClauses = cases:{caseClause}+;
+caseClausesRest = eol:eol case:caseClause;
+caseClauses = first:caseClause rest:{caseClausesRest};
 
 typeParam = id:(id | wildcard) [sub:typeParamClause]
 [b:tpLowerBound] [ub:tpUpperBound] vbs:{tpViewBound} cbs:{tpContextBound};
@@ -332,8 +338,9 @@ blockStatTemplDef = {annotation} {localModifier} tmplDef;
   | expr1
   ;
 # ???
-# block = first:blockStat rest:{ eol blockStat } [result:resultExpr];
-block = first:blockStat rest:{ eol blockStat };
+blockRest =  eol:eol stat:blockStat;
+block = first:blockStat rest:{blockRest} [result:resultExpr];
+# block = first:blockStat rest:{ eol:eol stat:blockStat };
 ccBlockExpr = lbrace:'{' [nl] cases:caseClauses [nl] rbrace:'}';
 simpleBlockExpr = lbrace:'{' [nl] block:block [nl] rbrace:'}';
 blockExpr = ccBlockExpr
