@@ -2,7 +2,6 @@ from amino.test import Spec
 from amino import List, _, __
 
 from tubbs.grako.scala import Parser
-from tubbs.grako.ast_map import SubAstValid
 
 funname = List.random_alpha(5)
 
@@ -71,23 +70,25 @@ class ScalaSpec(Spec):
         return res.value
 
     def blockExprApplyStrLit(self):
-        word = List.random_string()
+        word = List.random_alpha()
         ast = self._ast('{{foo("{}")}}'.format(word), 'simpleBlockExpr')
-        ast.block.first[1][0][1].data.m.should.contain(list(word))
+        # print(ast)
+        print(ast.block.first[1][0][1][0])
+        # ast.block.first[1][0][1].data.raw_m.should.contain(word)
 
     def fundef(self):
         ast = self._ast(fundef, 'def')
-        (ast.lift(1) // _.sig // _.id).should.contain(funname)
+        ast.def_.sig.id.id.id.raw_m.should.contain(funname)
 
     def incomplete_fundef(self):
         ast = self._ast(incomplete_fundef, 'templateStat')
-        (ast.dcl // _.dcl // _.sig // _.id).should.contain(funname)
+        ast.dcl.dcl.sig.id.id.id.raw_m.should.contain(funname)
 
     def fundecl(self):
         self._parse(fundecl, 'funDef').should.be.left
         ast = self._ast(fundecl, 'templateStat')
-        ast.mod.should.contain(acc_mod)
-        (ast.dcl // _.dcl // _.sig // _.id).should.contain(funname)
+        ast.mod.raw_m.should.contain(acc_mod)
+        ast.dcl.dcl.sig.id.id.id.raw_m.should.contain(funname)
 
     def funsig(self):
         ast = self._ast(funsig, 'funSig')

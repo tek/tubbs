@@ -3,6 +3,9 @@
 @@keyword :: import package super
 # @@keyword :: null this
 
+nl = {'\n'}+;
+eol = ';' | nl;
+
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
 whiteSpace = '\u0020' | '\u0009' | '\u000D' | '\u000A';
@@ -41,7 +44,7 @@ characterLiteral = "'" (CharNoQuoteOrNewline | UnicodeEscape | CharEscapeSeq) "'
 StringElement = CharNoDoubleQuoteOrNewline
   | UnicodeEscape
   | CharEscapeSeq;
-stringLiteralData = {StringElement};
+stringLiteralData(token) = {StringElement};
 singleLineStringLiteral = lquote:'"' data:stringLiteralData rquote:'"';
 multiLineChars = {['"'] ['"'] CharNoDoubleQuote} {'"'};
 multiLineStringLiteral = lquote:'"""' data:multiLineChars rquote:'"""';
@@ -49,12 +52,11 @@ stringLiteral =
   | singleLineStringLiteral
   | multiLineStringLiteral
   ;
-
 symbolLiteral = "'" plainid;
+
+# this is wrong
 comment = '/*' /./ '*/'
   | '//' /./;
-nl = {'\n'}+;
-eol = ';' | nl;
 
 @name op = !arrow op:{Opchar}+;
 @name plainid = id:/[A-Z$_a-z][A-Z$_a-z0-9]*/ [wildcard {Opchar}+];

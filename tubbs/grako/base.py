@@ -2,62 +2,121 @@ import hashlib
 import abc
 
 from grako import gencode
+from grako.exceptions import FailedToken
+from grako.parsing import Parser as GrakoParser
 from grako.ast import AST
 
-from amino import Either, Try, List, Map, L, Path, _, Right
+from amino import Either, Try, Map, L, Path, _, Right, List
 from amino.util.string import camelcaseify
+from amino.lazy import lazy
+from amino.func import dispatch
 
 from ribosome.record import Record, map_field
+
+from tubbs.grako.ast import to_list, AstMap, AstToken, AstList
+from tubbs.logging import Logging
 
 
 def flatten(ast):
     return ast if isinstance(ast, str) else ''.join(map(flatten, ast))
 
 
-def to_list(a):
-    return List.wrap(a) if isinstance(a, list) else a
-
-
 def filter_empty(l):
     return [a for a in l if not (isinstance(a, list) and not a)]
 
 
-class AstMap(AST, Map):
+class PostProc:
 
-    @staticmethod
-    def from_ast(ast: AST):
-        a = AstMap()
-        a.update(**ast)
-        a._order = ast._order
-        a._parseinfo = ast._parseinfo
-        a._closed = ast._closed
-        return a
+    def __call__(self, ast, rule, pos):
+        return self.wrap_data(ast, rule, pos)
 
-    def __getattr__(self, key):
-        return self.lift(key) / to_list
+    @lazy
+    def wrap_data(self):
+        return dispatch(self, [str, list, AstMap, AstToken], 'wrap_')
 
-    def get(self, key, default=None):
-        return dict.get(self, key, default)
+    def wrap_str(self, raw, rule, pos):
+        return AstToken(raw=raw, rule=rule, pos=pos)
 
+    def wrap_list(self, raw, rule, pos):
+        return AstList(raw, rule, pos)
 
-class DataSemantics:
+    def wrap_ast_map(self, ast, rule, pos):
+        return ast
 
-    def id(self, ast):
-        return flatten(ast)
-
-    def _default(self, ast):
-        return (
-            ast
-            if isinstance(ast, str) else
-            filter_empty(ast)
-            if isinstance(ast, list) else
-            AstMap.from_ast(ast)
-            if isinstance(ast, dict) else
-            ast
-        )
+    def wrap_ast_token(self, token, rule, pos):
+        return token
 
 
-class ParserBase(metaclass=abc.ABCMeta):
+class DataSemantics(Logging):
+
+    def _special(self, ast, name):
+        handler = getattr(self, '_special_{}'.format(name),
+                          L(self._no_special)(name, _))
+        return handler(ast)
+
+    def _special_token(self, ast):
+        raw = (ast / _.raw).mk_string()
+        return AstToken(raw=raw, rule=ast.rule, pos=ast.pos)
+
+    def _no_special(self, name, ast):
+        self.log.error('no handler for argument `{}` and {}'.format(name, ast))
+        return ast
+
+    def _default(self, ast, *a, **kw):
+        ast1 = List.wrap(a).head / L(self._special)(ast, _) | ast
+        return AstMap.from_ast(ast1) if isinstance(ast1, AST) else ast1
+
+
+class ParserMixin(GrakoParser):
+
+    @lazy
+    def _wrap_data(self):
+        return PostProc()
+
+    @property
+    def _last_rule(self):
+        return self._rule_stack[-1]
+
+    def _token(self, raw):
+        self._next_token()
+        pos = self._pos
+        if self._buffer.match(raw) is None:
+            self._trace_match(raw, failed=True)
+            self._error(raw, etype=FailedToken)
+        token = AstToken(raw=raw, pos=pos, rule=self._last_rule)
+        self._trace_match(token)
+        self._add_cst_node(token)
+        self._last_node = token
+        return token
+
+    def name_last_node(self, name):
+        self.ast[name] = self._wrap_data(self.last_node, name, self._last_pos)
+
+    def _call(self, rule, name, params, kwparams):
+        self._last_pos = pos = self._pos
+        ret = GrakoParser._call(self, rule, name, params, kwparams)
+        return self._wrap_data(ret, name, pos)
+
+    def _wrap_str(self, raw, rule, pos):
+        return AstToken(raw=raw, rule=rule, pos=pos)
+
+    def _wrap_list(self, raw, rule, pos):
+        return AstList(raw, rule, pos)
+
+    def _wrap_dict(self, ast, rule, pos):
+        if not isinstance(ast, AstMap):
+            raise Exception('invalid ast map: {}'.format(ast))
+        return ast
+
+    def _wrap_ast_token(self, token, rule, pos):
+        return token
+
+    def _add_cst_node(self, node):
+        wrapped = self._wrap_data(node, self._last_rule, self._last_pos)
+        return super()._add_cst_node(wrapped)
+
+
+class ParserBase(abc.ABC):
 
     @abc.abstractproperty
     def name(self) -> str:
@@ -80,8 +139,12 @@ class ParserBase(metaclass=abc.ABCMeta):
         return camelcaseify(self.name)
 
     @property
+    def parser_class(self):
+        return '{}Parser'.format(self.camel_name)
+
+    @property
     def base_dir(self):
-        return Path(__file__).parent.parent.parent
+        return Path(__file__).parent.parent.parent  # type: ignore
 
     @property
     def chksums_path(self):
@@ -93,7 +156,9 @@ class ParserBase(metaclass=abc.ABCMeta):
 
     @property
     def parser_args(self):
-        return Map()
+        return Map(
+            # trace=True
+        )
 
     @property
     def grammar_chksum(self):
@@ -115,7 +180,10 @@ class ParserBase(metaclass=abc.ABCMeta):
 
     @property
     def parser(self):
-        return Either.import_path(self.path) // L(Try)(_, **self.parser_args)
+        def cons(tpe):
+            cls = type(self.parser_class, (ParserMixin, tpe), {})
+            return Try(lambda *a, **kw: cls(*a, **kw), **self.parser_args)
+        return Either.import_path(self.path) // cons
 
     @property
     def semantics(self):
@@ -133,7 +201,7 @@ class BuiltinParser(ParserBase):
 
     @property
     def path(self):
-        return 'tubbs.parsers.{}.{}Parser'.format(self.name, self.camel_name)
+        return 'tubbs.parsers.{}.{}'.format(self.name, self.parser_class)
 
     @property
     def grammar_path(self):
@@ -172,6 +240,7 @@ class Parsers(Record):
         )
 
     def parser(self, name):
-        return self.parsers.lift(name)
+        return (self.parsers.lift(name)
+                .to_either('no parser for `{}`'.format(name)))
 
 __all__ = ('ParserBase',)
