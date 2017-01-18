@@ -46,6 +46,7 @@ class AstSpec(Spec):
         tok2 = ast.r._data
         tok1.pos.should.equal(4)
         tok2.pos.should.equal(8)
+        tok2.endpos.should.equal(11)
 
     def list_range(self):
         clos = ', bar, zam'

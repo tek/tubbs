@@ -1,4 +1,4 @@
-from grako.exceptions import FailedToken, FailedKeywordSemantics, FailedPattern
+from grako.exceptions import FailedKeywordSemantics
 from grako.parsing import Parser as GrakoParser
 from grako.ast import AST
 
@@ -67,61 +67,49 @@ class ParserExt(GrakoParser):
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
-        self._poss = []  # type: list
+        self._pos_stack = [0]  # type: list
+        self._last_ws = 0
 
     @lazy
     def post_proc(self):
         return PostProc()
 
-    def _wrap_data(self, node, name, pos):
+    def _wrap_data(self, node, name):
         return self.post_proc(node, name, self._last_pos, self._last_ws)
 
     @property
     def _last_rule(self):
         return self._rule_stack[-1]
 
-    def _pattern(self, pattern):
-        self._last_pos = pos = self._pos
-        raw = self._buffer.matchre(pattern)
-        if raw is None:
-            self._trace_match('', pattern, failed=True)
-            self._error(pattern, etype=FailedPattern)
-            token = None
-        else:
-            token = AstToken(raw, pos, self._last_rule, self._last_ws)
-        self._trace_match(token, pattern)
-        self._add_cst_node(token)
-        self._last_node = token
-        return token
+    @property
+    def _last_pos(self):
+        return self._pos_stack[-1]
 
-    def _token(self, raw):
+    def _next_token(self):
         pre_pos = self._pos
-        self._next_token()
+        super()._next_token()
         pos = self._pos
+        self._pos_stack.pop()
+        self._pos_stack.append(pos)
         self._last_ws = pos - pre_pos
-        if self._buffer.match(raw) is None:
-            self._trace_match(raw, failed=True)
-            self._error(raw, etype=FailedToken)
-        token = AstToken(raw, pos, self._last_rule, self._last_ws)
-        self._trace_match(token)
-        self._add_cst_node(token)
-        self._last_node = token
-        return token
+
+    def _call(self, rule, name, params, kwparams):
+        self._pos_stack.append(self._pos)
+        result = GrakoParser._call(self, rule, name, params, kwparams)
+        wrapped = self._wrap_data(result, name)
+        self._pos_stack.pop()
+        self._last_result = wrapped
+        return wrapped
+
+    def _add_cst_node(self, node):
+        wrapped = self._wrap_data(node, self._last_rule)
+        return super()._add_cst_node(wrapped)
 
     def name_last_node(self, name):
         node = (self.last_node
                 if isinstance(self.last_node, AstElem) else
-                self._wrap_data(self.last_node, name, self._last_pos))
+                self._wrap_data(self.last_node, name))
         self.ast[name] = node
-
-    def _call(self, rule, name, params, kwparams):
-        self._last_pos = pos = self._pos
-        self._poss.append(self._pos)
-        result = GrakoParser._call(self, rule, name, params, kwparams)
-        wrapped = self._wrap_data(result, name, pos)
-        self._poss.pop()
-        self._last_result = wrapped
-        return wrapped
 
     def _check_name(self):
         name = str(self._last_result)
