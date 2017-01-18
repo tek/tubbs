@@ -4,6 +4,7 @@ from typing import Tuple, Callable
 from amino import List, L, _, Just, Empty, __
 from amino.lazy import lazy
 from amino.list import flatten
+from amino.func import is_not_none
 
 from tubbs.logging import Logging
 from tubbs.grako.ast import AstList, AstElem, AstToken, AstMap
@@ -101,7 +102,9 @@ class MapNode(Inode):
 
     @lazy
     def sub(self):
-        return (self.data.valfilter(lambda a: a is not None).to_list
+        return (self.data
+                .valfilter(is_not_none)
+                .to_list
                 .map2(L(node)(_, _, self)))
 
     @property
@@ -113,9 +116,7 @@ class MapNode(Inode):
         return indent(self.sub // _.strings).cons(self._desc)
 
     def sub_range(self, name):
-        return self.data.lift(name) // (
-            lambda a: Just(a.range) if isinstance(a, AstToken) else Empty()
-        ) | (0, 0)
+        return self.data.lift(name).e / _.range | (0, 0)
 
 
 class ListNode(Inode):

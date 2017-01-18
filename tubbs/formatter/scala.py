@@ -24,13 +24,13 @@ class Formatter(BuiltinFormatter):
 
 class ScalaBreakRules(BreakRules):
 
-    def node_case_clause(self, node):
+    def map_case_clause(self, node):
         return 'start', 0.9, 0.0
 
-    def leaf_param_clause_lpar(self, leaf):
+    def token_param_clause_lpar(self, leaf):
         return 'lpar', 0.89, 0.1
 
-    def leaf_implicit_param_clause_lpar(self, leaf):
+    def token_implicit_param_clause_lpar(self, leaf):
         return 'lpar', 0.9, 0.1
 
 

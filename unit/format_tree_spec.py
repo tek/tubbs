@@ -1,6 +1,5 @@
 from amino.test import Spec
 from amino.lazy import lazy
-from amino import _
 
 from tubbs.grako.scala import Parser
 from tubbs.formatter.tree import Tree, ListNode
@@ -33,14 +32,14 @@ class FormatTreeSpec(Spec):
         def check_node(node):
             if not isinstance(node, ListNode):
                 start, end = node.range
-                fun[start:end].should.equal(node.text)
+                fun[start:end].should.equal(node.text)  # type: ignore
         tree = self._tree.root
         tree.foreach(check_node)
 
     def create(self):
         breaker = Breaker(37)
         # print(t)
-        broken = self._tree / breaker.format
+        broken = breaker.format(self._tree)
         print(broken.join_lines)
 
 __all__ = ('FormatTreeSpec',)

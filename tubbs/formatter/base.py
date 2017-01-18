@@ -98,16 +98,16 @@ class Breaker(Formatter):
                 if isinstance(result, List) else
                 mkbreakss(result))
 
-    def break_node(self, node):
+    def break_map_node(self, node):
         sub = node.sub.flat_map(self.breaks)
-        return self.handle(node, 'node_{}') + sub
+        return self.handle(node, 'map_{}') + sub
 
     def break_list_node(self, node):
         sub = node.sub.flat_map(self.breaks)
-        return self.handle(node, 'list_node_{}') + sub
+        return self.handle(node, 'list_{}') + sub
 
-    def break_leaf(self, leaf):
-        return self.handle(leaf, 'leaf_{}')
+    def break_token_node(self, node):
+        return self.handle(node, 'token_{}')
 
 
 class Indenter(Formatter):
