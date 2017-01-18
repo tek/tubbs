@@ -7,8 +7,16 @@ from tubbs.formatter.scala import Breaker
 
 fun = '''def fun[A, B, C](p1: Type1, p2: Type2)\
 (implicit p3: A :: B, p4: Type4) = {
+    val a = p1 match {case x: Type2 => 5
+        case _ => 3
+    }
+}'''
+
+broken_fun = '''def fun[A, B, C]
+(p1: Type1, p2: Type2)
+(implicit p3: A :: B, p4: Type4) = {
     val a = p1 match {
-        case x: Type2 => 5
+case x: Type2 => 5
         case _ => 3
     }
 }'''
@@ -38,8 +46,7 @@ class FormatTreeSpec(Spec):
 
     def create(self):
         breaker = Breaker(37)
-        # print(t)
         broken = breaker.format(self._tree)
-        print(broken.join_lines)
+        broken.join_lines.must.equal(broken_fun)
 
 __all__ = ('FormatTreeSpec',)
