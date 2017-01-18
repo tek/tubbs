@@ -68,11 +68,13 @@ class ParserExt(GrakoParser):
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self._poss = []  # type: list
-        self._last_endpos = 0
 
     @lazy
-    def _wrap_data(self):
+    def post_proc(self):
         return PostProc()
+
+    def _wrap_data(self, node, name, pos):
+        return self.post_proc(node, name, self._last_pos, self._last_ws)
 
     @property
     def _last_rule(self):
@@ -100,24 +102,23 @@ class ParserExt(GrakoParser):
         if self._buffer.match(raw) is None:
             self._trace_match(raw, failed=True)
             self._error(raw, etype=FailedToken)
-        token = AstToken(raw, pos, self._last_rule,
-                         self._last_ws)
+        token = AstToken(raw, pos, self._last_rule, self._last_ws)
         self._trace_match(token)
         self._add_cst_node(token)
         self._last_node = token
         return token
 
     def name_last_node(self, name):
-        self.ast[name] = self._wrap_data(self.last_node, name, self._last_pos,
-                                         self._last_endpos)
+        node = (self.last_node
+                if isinstance(self.last_node, AstElem) else
+                self._wrap_data(self.last_node, name, self._last_pos))
+        self.ast[name] = node
 
     def _call(self, rule, name, params, kwparams):
         self._last_pos = pos = self._pos
         self._poss.append(self._pos)
         result = GrakoParser._call(self, rule, name, params, kwparams)
-        wrapped = self._wrap_data(result, name, pos, self._last_endpos)
-        if isinstance(wrapped, AstToken):
-            self._last_endpos = wrapped.endpos
+        wrapped = self._wrap_data(result, name, pos)
         self._poss.pop()
         self._last_result = wrapped
         return wrapped
@@ -128,27 +129,5 @@ class ParserExt(GrakoParser):
             name = name.upper()
         if name in self.keywords:
             raise FailedKeywordSemantics('"%s" is a reserved word' % name)
-
-    def _add_cst_node(self, node):
-        wrapped = self._wrap_data(node, self._last_rule, self._last_pos,
-                                  self._last_endpos)
-        return super()._add_cst_node(wrapped)
-
-    def _wrap_closure(self, cb, block, sep=None, prefix=None):
-        rule = self._last_rule
-        result = cb(self, block, sep, prefix)
-        flat = flatten_list(result)
-        return AstList(flat, rule)
-
-    def _closure(self, block, sep=None, prefix=None):
-        return self._wrap_closure(GrakoParser._closure, block, sep, prefix)
-
-    def _positive_closure(self, block, sep=None, prefix=None):
-        return self._wrap_closure(GrakoParser._positive_closure, block, sep,
-                                  prefix)
-
-    def _empty_closure(self):
-        cb = lambda self, a, b, c: super()._empty_closure()
-        return self._wrap_closure(cb, None, None, None)
 
 __all__ = ('ParserExt', 'DataSemantics')
