@@ -1,0 +1,9 @@
+id(token) = /[a-z]+/;
+
+tok(token) = 'tok';
+
+ids = tok:tok l:id r:id;
+
+arg = ',' id;
+
+call = tok:tok lp:'(' first:id rest:{arg} rp:')';

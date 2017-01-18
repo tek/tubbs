@@ -3,22 +3,46 @@ from typing import Callable, Union, TypeVar
 
 from grako.ast import AST
 
-from amino import Map, List, Just, Empty, _, L, Maybe, Either, Left, Right
+from amino import Map, List, Empty, _, L, Maybe, Either, Left, Right
 from amino.func import call_by_name, dispatch_with
 
-from ribosome.record import Record, str_field, int_field
 
+class AstElem(abc.ABC):
 
-class AstElem:
-    pass
+    @abc.abstractproperty
+    def rule(self) -> str:
+        ...
+
+    @abc.abstractproperty
+    def pos(self) -> int:
+        ...
+
+    @abc.abstractproperty
+    def endpos(self) -> int:
+        ...
+
+    @property
+    def range(self):
+        return self.pos, self.endpos
 
 
 class AstList(AstElem, List):
 
-    def __init__(self, data, rule, pos) -> None:
-        self.rule = rule
-        self.pos = pos
-        super().__init__(*data)
+    def __init__(self, data, rule) -> None:
+        self._rule = rule
+        List.__init__(self, *data)
+
+    @property
+    def rule(self):
+        return self._rule
+
+    @property
+    def pos(self):
+        return self.head.e / _.pos | 0
+
+    @property
+    def endpos(self):
+        return self.last.e / _.endpos | 0
 
     def lift(self, key):
         return super().lift(key).cata(
@@ -27,21 +51,36 @@ class AstList(AstElem, List):
         )
 
 
-class AstToken(AstElem, Record):
-    raw = str_field()
-    pos = int_field()
-    rule = str_field()
+class AstToken(AstElem):
+
+    def __init__(self, raw, pos, rule, ws_count) -> None:
+        self.raw = raw
+        self._rule = rule
+        self._pos = pos
+        self.ws_count = ws_count
 
     @property
-    def _str_extra(self):
-        return List(self.raw, self.pos, self.rule)
+    def rule(self):
+        return self._rule
 
     @property
-    def range(self):
-        return self.pos, self.pos + len(self.raw)
+    def pos(self):
+        return self._pos
+
+    @property
+    def endpos(self):
+        return self.pos + len(self.raw)
 
     def __str__(self):
         return self.raw
+
+    def __repr__(self):
+        return '{}({}, {}, {})'.format(
+            self.__class__.__name__, self.rule, self.raw, self.pos)
+
+    @property
+    def whitespace(self):
+        return ' ' * self.ws_count
 
 
 class AstMap(AstElem, AST, Map):
@@ -55,6 +94,18 @@ class AstMap(AstElem, AST, Map):
         a._closed = ast._closed
         return a
 
+    @property
+    def rule(self):
+        return self.parseinfo.rule
+
+    @property
+    def pos(self):
+        return self.parseinfo.pos
+
+    @property
+    def endpos(self):
+        return self.parseinfo.endpos
+
     def lift(self, key):
         return super().lift(key).cata(
             L(SubAst.cons)(_, key, self.rule),
@@ -66,10 +117,6 @@ class AstMap(AstElem, AST, Map):
 
     def get(self, key, default=None):
         return dict.get(self, key, default)
-
-    @property
-    def rule(self):
-        return self.parseinfo.rule
 
     def __str__(self):
         return 'AstMap({}, {})'.format(self.rule, dict(self))
@@ -134,8 +181,8 @@ class SubAst(abc.ABC):
 
 class SubAstValid(SubAst):
 
-    def __init__(self, _data) -> None:
-        self._data = _data
+    def __init__(self, data) -> None:
+        self._data = data
 
     def __str__(self):
         return '{}({})'.format(self.__class__.__name__, self._data)
