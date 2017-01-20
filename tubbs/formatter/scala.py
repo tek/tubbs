@@ -2,7 +2,7 @@ from amino import Left, List
 from amino.util.string import snake_case
 
 from tubbs.formatter import base
-from tubbs.formatter.base import BuiltinFormatter, BreakRules
+from tubbs.formatter.base import BuiltinFormatter, BreakRules, IndentRules
 from tubbs.grako.ast import AstMap
 
 
@@ -40,7 +40,21 @@ class Breaker(base.Breaker):
         super().__init__(ScalaBreakRules(), textwidth)
 
 
+class ScalaIndentRules(IndentRules):
+
+    def case_clause_first(self, node):
+        return 1
+
+    def block_first(self, node):
+        return 1
+
+    def rbrace(self, node):
+        return -1
+
+
 class Indenter(base.Indenter):
-    pass
+
+    def __init__(self, shiftwidth) -> None:
+        super().__init__(ScalaIndentRules(), shiftwidth)
 
 __all__ = ('Formatter', 'Breaker', 'Indenter')

@@ -1,14 +1,29 @@
 import abc
 from typing import Callable, Sized
 
-from amino import Either, List, Left, L, Boolean, _, __
+from amino import Either, List, L, Boolean, _, __
 from amino.util.string import snake_case
 from amino.func import dispatch
 
-from ribosome.record import Record, int_field, float_field
+from ribosome.record import Record, int_field, float_field, field
 
 from tubbs.logging import Logging
-from tubbs.formatter.tree import Tree, MapNode, ListNode, TokenNode
+from tubbs.formatter.tree import Tree, MapNode, ListNode, TokenNode, Node
+
+
+def eols(tree: Tree):
+    def folder(z, a):
+        cur, last = z
+        n = last + len(a) + 1
+        return cur.cat(n), n
+    def fold(head, tail):
+        return tail.fold_left((List(len(head)), len(head)))(folder)
+    return tree.lines.detach_head.map2(fold) / _[0] | List()
+
+
+def bols(tree: Tree):
+    return tree.lines.fold_left(List(0))(
+        lambda z, a: z.cat((z.last | 0) + 1 + len(a)))
 
 
 class Formatter(Logging, abc.ABC):
@@ -50,10 +65,8 @@ class Breaker(Formatter):
         return self.apply_breaks(tree, breaks)
 
     def apply_breaks(self, tree, breaks):
-        starts = tree.lines.fold_left(List(0))(
-            lambda z, a: z.cat((z.last | 0) + 1 + len(a)))
         return (tree.lines
-                .zip(starts)
+                .zip(bols(tree))
                 .flat_map2(L(self.break_line)(_, breaks, _)))
 
     def break_line(self, line: List[str], breaks: List[str], line_start: int
@@ -110,9 +123,72 @@ class Breaker(Formatter):
         return self.handle(node, 'token_{}')
 
 
+class IndentRules:
+
+    def default(self, node):
+        return 0
+
+
+class Indent(Record):
+    node = field(Node)
+    indent = int_field()
+
+    @property
+    def pos(self):
+        return self.node.pos
+
+    @property
+    def _str_extra(self):
+        return List(self.node.key, self.indent)
+
+
 class Indenter(Formatter):
 
-    def format(self, tree, lines):
-        return Left('NI')
+    def __init__(self, rules: IndentRules, shiftwidth: int) -> None:
+        self.rules = rules
+        self.shiftwidth = shiftwidth
+
+    def format(self, tree: Tree):
+        eol = eols(tree)
+        def first(nodes):
+            m = nodes.min_by(_.pos) / _.pos
+            return nodes.filter(lambda a: m.contains(a.pos))
+        line_nodes = (
+            tree.line_nodes(eol)
+            .map(first)
+        )
+        indents = (
+            line_nodes /
+            __.map(self.indents) //
+            __.max_by(lambda a: abs(a.indent)) /
+            _.indent
+        )
+        return self.indent(tree.root.indent, tree.lines, indents)
+
+    def _handler(self, node):
+        def handler(name: str, or_else: Callable=lambda: None):
+            h = getattr(self.rules, name, None)
+            return h or or_else() or self.rules.default
+        rule = snake_case(node.rule)
+        return handler(
+            '{}_{}'.format(rule, node.key),
+            L(handler)(rule, L(handler)(node.key))
+        )
+
+    def indents(self, node):
+        indent = self._handler(node)(node)
+        return Indent(node=node, indent=indent)
+
+    def indent(self, baseline: int, lines: List[str], indents: List[int]
+               ) -> List[str]:
+        root_indent = baseline / self.shiftwidth
+        def shift(z, a):
+            current_indent, result = z
+            line, indent = a
+            new_indent = current_indent + indent
+            line_indent = int(self.shiftwidth * new_indent)
+            new_line = '{}{}'.format(' ' * line_indent, line.strip())
+            return new_indent, result.cat(new_line)
+        return lines.zip(indents).fold_left((root_indent, List()))(shift)[1]
 
 __all__ = ('Formatter', 'BuiltinFormatter', 'Breaker', 'Indenter')

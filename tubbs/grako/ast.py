@@ -38,11 +38,11 @@ class AstList(AstElem, List):
 
     @property
     def pos(self):
-        return self.head.e / _.pos | 0
+        return self.head.e / _.pos | -1
 
     @property
     def endpos(self):
-        return self.last.e / _.endpos | 0
+        return self.last.e / _.endpos | -1
 
     def lift(self, key):
         return super().lift(key).cata(

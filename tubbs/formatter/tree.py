@@ -1,7 +1,7 @@
 import abc
 from typing import Tuple, Callable
 
-from amino import List, L, _, Just, Empty, __
+from amino import List, L, _, __, Boolean
 from amino.lazy import lazy
 from amino.list import flatten
 from amino.func import is_not_none
@@ -44,11 +44,20 @@ class Node(Logging, abc.ABC):
         return self.data.range
 
     @property
+    def pos(self):
+        return self.data.pos
+
+    @abc.abstractproperty
+    def pos_with_ws(self) -> int:
+        ...
+
+    @property
     def show(self):
         return self.strings.mk_string('\n')
 
     def __str__(self):
-        return '{}({} children)'.format(self.__class__.__name__, len(self.sub))
+        return '{}({}, {}, {} children)'.format(
+            self.__class__.__name__, self.rule, self.key, len(self.sub))
 
     @abc.abstractmethod
     def foreach(self, f: Callable[['Node'], None]):
@@ -60,6 +69,21 @@ class Node(Logging, abc.ABC):
 
     @abc.abstractproperty
     def with_ws(self) -> str:
+        ...
+
+    @abc.abstractmethod
+    def filter(self, pred: Callable[['Node'], bool]) -> 'List[Node]':
+        ...
+
+    def _filter(self, pred):
+        return Boolean(pred(self)).maybe(self).to_list
+
+    @abc.abstractproperty
+    def indent(self) -> int:
+        ...
+
+    @abc.abstractproperty
+    def flatten(self) -> 'List[Node]':
         ...
 
 
@@ -80,6 +104,23 @@ class Inode(Node):
     @property
     def with_ws(self):
         return self.text
+
+    def filter(self, pred):
+        return self._filter(pred) + self.sub.flat_map(__.filter(pred))
+
+    @property
+    def indent(self):
+        return self.sub.head / _.indent | 0
+
+    @property
+    def pos_with_ws(self):
+        return self.sub.head / _.pos_with_ws | self.pos
+
+    @property
+    def flatten(self):
+        yield self
+        for a in self.sub:
+            yield from a.flatten
 
 
 class MapNode(Inode):
@@ -102,10 +143,13 @@ class MapNode(Inode):
 
     @lazy
     def sub(self):
-        return (self.data
-                .valfilter(is_not_none)
-                .to_list
-                .map2(L(node)(_, _, self)))
+        return (
+            self.data
+            .valfilter(is_not_none)
+            .to_list
+            .map2(L(node)(_, _, self))
+            .sort_by(_.pos)
+        )
 
     @property
     def _desc(self):
@@ -187,6 +231,21 @@ class TokenNode(Node):
     def with_ws(self):
         return '{}{}'.format(self.data.whitespace, self.text)
 
+    def filter(self, pred):
+        return self._filter(pred)
+
+    @property
+    def indent(self):
+        return len(self.data.whitespace)
+
+    @property
+    def pos_with_ws(self):
+        return self.pos - self.indent
+
+    @property
+    def flatten(self):
+        yield self
+
 
 def node(key: str, data: AstElem, parent: Node):
     def err():
@@ -218,5 +277,21 @@ class Tree(Logging):
     @property
     def lines(self):
         return self.root.lines
+
+    @property
+    def flatten(self):
+        return List.wrap(self.root.flatten)
+
+    def line_nodes(self, eols):
+        def index(node):
+            return (eols.find(_ > node.pos) | 0) - 1
+        return (
+            self.flatten
+            .group_by(index)
+            .filter(lambda a: a[0] >= 0)
+            .map2(lambda a, b: (a, b.filter(lambda a: a.pos >= 0)))
+            .sort_by(_[0]) /
+            _[1]
+        )
 
 __all__ = ('Tree',)
