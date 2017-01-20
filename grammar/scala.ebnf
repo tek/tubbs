@@ -241,7 +241,7 @@ tpContextBound = ':' type;
 
 paramClauses = {params:paramClause}+ [implicits:implicitParamClause];
 paramClause = [nl] lpar:'(' !'implicit' [params:params] rpar:')';
-implicitParamClause = lpar:'(' implicitkw:'implicit' params:params rpar:')';
+implicitParamClause = [nl] lpar:'(' implicitkw:'implicit' params:params rpar:')';
 params = param {',' param};
 param = {anno:annotation} id:id [colon:':' tpe:paramType] [assign:'='
 rhs:expr];
@@ -301,9 +301,10 @@ patDef = pats:(pattern2 {',' pattern2}) [colon:':' tpe:type] assign:'=' rhs:expr
 varDef = patDef
   | ids ':' type '=' wildcard;
 
-funSig = id:id [tparams:funTypeParamClause] [paramss:paramClauses];
-funDefFull = sig:funSig [':' type:type] '=' rhs:expr;
-funDefUnit = sig:funSig [nl] '{' rhs:block '}';
+funSig = id:id [nl1:nl] [tparams:funTypeParamClause] [nl2:nl]
+[paramss:paramClauses];
+funDefFull = sig:funSig [nl:nl] [colon:':' type:type] assign:'=' rhs:expr;
+funDefUnit = sig:funSig [nl:nl] '{' rhs:block '}';
 funDefCtor = 'this' paramClauses (' = ' constrExpr | [nl] constrBlock);
 funDef1 =
   | funDefFull
@@ -330,17 +331,14 @@ resultExpr = expr1
   | (bindings | (['implicit'] id | wildcard) ':' compoundType) arrow block;
 blockStatDef = {annotation} ['implicit' | 'lazy'] def;
 blockStatTemplDef = {annotation} {localModifier} tmplDef;
-# remove @name
-@name blockStat =
+blockStat =
   | import
   | blockStatDef
   | blockStatTemplDef
   | expr1
   ;
-# ???
 blockRest =  eol:eol stat:blockStat;
 block = first:blockStat rest:{blockRest} [result:resultExpr];
-# block = first:blockStat rest:{ eol:eol stat:blockStat };
 ccBlockExpr = lbrace:'{' [nl] cases:caseClauses [nl] rbrace:'}';
 simpleBlockExpr = lbrace:'{' [nl] block:block [nl] rbrace:'}';
 blockExpr = ccBlockExpr
