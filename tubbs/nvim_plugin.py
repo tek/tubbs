@@ -50,7 +50,7 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
     def tub_a(self):
         pass
 
-    @msg_command(IObj)
+    @msg_command(IObj, sync=True)
     def tub_i(self):
         pass
 

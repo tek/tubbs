@@ -9,9 +9,10 @@ from amino.util.string import camelcaseify
 from ribosome.record import Record, map_field
 
 from tubbs.grako.parser_ext import ParserExt, DataSemantics
+from tubbs.logging import Logging
 
 
-class ParserBase(abc.ABC):
+class ParserBase(Logging, abc.ABC):
 
     @abc.abstractproperty
     def name(self) -> str:
@@ -85,10 +86,12 @@ class ParserBase(abc.ABC):
         return DataSemantics()
 
     def parse(self, text: str, rule: str):
+        def log_error(err):
+            self.log.debug(f'failed to parse `{rule}`:\n{err}')
         return (
             self.parser //
             L(Try)(_.parse, text, rule, semantics=self.semantics)
-        )
+        ).leffect(log_error)
 
 
 class BuiltinParser(ParserBase):

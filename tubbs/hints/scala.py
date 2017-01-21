@@ -12,7 +12,7 @@ class DefHint(RegexHint):
 
     @property
     def rules(self):
-        return List('TemplateStat')
+        return List('funDef')
 
 
 class Hints(HintsBase):

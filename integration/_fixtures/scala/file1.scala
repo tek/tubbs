@@ -20,7 +20,7 @@ with Base2[TPar2]
   def fun4 = Ob1.fun2(null)
 
   def fun5[TPar3 <: UB2: TC2](par8: TPar3) = {
-    def fun6 = par8 >> null
+    val a = 1
     fun6
   }
 }

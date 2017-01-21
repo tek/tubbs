@@ -1,11 +1,12 @@
 from ribosome.nvim import NvimFacade
 from ribosome.record import Record, field, str_field
 
-from tubbs.grako.base import ParserBase, AstMap
+from tubbs.grako.base import ParserBase
 from tubbs.hints.base import HintsBase, HintMatch
 from tubbs.logging import Logging
+from tubbs.grako.ast import AstMap
 
-from amino import Maybe, __, L, _, List, Map
+from amino import Maybe, __, L, _, List, Map, Either
 
 
 class Match(Record):
@@ -47,12 +48,12 @@ class Match(Record):
         return self.end / (_ + 1)
 
     @property
-    def range(self):
-        return self.start & self.end
+    def range(self) -> Either:
+        return (self.start & self.end).to_either(f'{self} has no range')
 
     @property
-    def range1(self):
-        return self.start1 & self.end1
+    def range1(self) -> Either:
+        return (self.start1 & self.end1).to_either(f'{self} has no range1')
 
 
 class Crawler(Logging):
@@ -63,18 +64,23 @@ class Crawler(Logging):
         self.parser = parser
         self.hints = hints
 
-    def find(self, ident, linewise=True) -> Match:
+    def find_and_parse(self, ident, linewise=True) -> Either:
+        return self.find(ident, linewise) // L(self._parse)(ident, _)
+
+    def find(self, ident, linewise=True) -> Either:
+        self.log.debug(f'crawling for {ident}')
         return (
             (self.hints // __.find(self.vim, ident))
-            .o(L(self._default_start)(ident)) //
-            L(self._parse)(ident, _)
+            .to_either(f'no hint matched for {ident}')
+            .o(L(self._default_start)(ident))
         )
 
-    def _default_start(self, ident):
-        return (self.vim.window.line /
+    def _default_start(self, ident) -> Either:
+        return (self.vim.window.line.to_either('no current line') /
                 L(HintMatch.from_attr)('line')(_, rules=List(ident)))
 
-    def _parse(self, ident, match):
+    def _parse(self, ident, match) -> Either:
+        self.log.debug(f'parsing {match} for {ident}')
         text = self.vim.buffer.content[match.line:].join_lines
         def match_rule(rule):
             return (
@@ -82,6 +88,10 @@ class Crawler(Logging):
                 L(Match.from_attr('ast'))(_, rule=rule, ident=ident,
                                           hint=match)
             )
-        return match.rules.find_map(match_rule)
+        return (
+            match.rules
+            .find_map(match_rule)
+            .to_either(f'no rule matched for `{ident}` at {match}')
+        )
 
 __all__ = ('Crawler',)
