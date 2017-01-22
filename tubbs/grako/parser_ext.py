@@ -142,8 +142,12 @@ class ParserExt(GrakoParser):
         return super()._add_cst_node(wrapped)
 
     def name_last_node(self, name):
+        after_cst = lambda: (
+            isinstance(self.cst, AstToken) and self.cst.raw == self.last_node)
         node = (self.last_node
                 if isinstance(self.last_node, AstElem) else
+                self.cst
+                if after_cst() else
                 self._wrap_data(self.last_node, self._last_rule))
         if name in self.ast:
             cur = self.ast[name]

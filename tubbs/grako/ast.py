@@ -102,8 +102,9 @@ class AstToken(AstElem):
         return self.raw
 
     def __repr__(self):
+        raw = '\\n' if self.raw == '\n' else self.raw
         return '{}({}, {}, {}, {})'.format(
-            self.__class__.__name__, self.rule, self.raw, self.pos,
+            self.__class__.__name__, self.rule, raw, self.pos,
             self.ws_count)
 
     @property
