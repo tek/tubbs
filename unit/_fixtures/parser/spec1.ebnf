@@ -1,16 +1,20 @@
 id(token) = /[a-z]+/;
 
-tok(token) = 'tok';
+tk(token) = 'tok';
 
-ids = tok:tok l:id r:id;
+ids = tk:tk l:id r:id;
 
 arg = ',' id;
 
-call = tok:tok lp:'(' first:id rest:{arg} rp:')';
+args = id {arg};
 
-pos = {id:id}+ [tok];
+call = tk:tk lp:'(' first:id rest:{arg} rp:')';
 
-poswrap = tok:'tok' ':' [pos:pos];
+pos = {id:id}+ [tk];
 
-# error
-list = 'tok' ':' [pos];
+poswrap = tk:tk ':' [clos:pos];
+
+ws = tk:tk ':' [args:args];
+
+# FIXME error
+list = tk ':' [pos];

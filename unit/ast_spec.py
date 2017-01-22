@@ -1,5 +1,6 @@
 from amino.test import Spec, temp_dir
 from amino.test.path import fixture_path
+from amino import _, __
 
 from tubbs.grako.base import BuiltinParser
 from tubbs.formatter.tree import Tree
@@ -61,6 +62,20 @@ class AstSpec(Spec):
     def positive_closure(self):
         data = 'tok: foo bar baz'
         ast = self._ast(data, 'poswrap')
-        print(ast['pos'].id)
+        print(ast.clos.id)
+
+    def whitespace(self):
+        i = 4
+        data = '{}tok: foo,  bar,baz'.format(' ' * i)
+        ast = self._ast(data, 'ws')
+        tree = Tree(ast)
+        tree.root.indent.should.equal(i)
+        args = (tree.root.sub.last / _.sub).x
+        indent = lambda i: (args.lift(i) / _.indent)
+        indent(0).should.contain(1)
+        indent(1).should.contain(0)
+        indent(2).should.contain(2)
+        indent(3).should.contain(0)
+        indent(4).should.contain(0)
 
 __all__ = ('AstSpec',)
