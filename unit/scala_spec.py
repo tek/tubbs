@@ -74,7 +74,8 @@ class ScalaSpec(Spec):
         return res.value
 
     def keyword(self):
-        self._ast.when.called_with('case', 'plainid').should.throw(Exception)
+        (self._ast.when.called_with('case', 'plainidName')
+         .should.throw(Exception))
 
     def blockExprApplyStrLit(self):
         word = List.random_alpha()
@@ -84,10 +85,11 @@ class ScalaSpec(Spec):
     def fundef(self):
         ast = self._ast(fundef, 'def')
         ast.def_.sig.id.raw.should.contain(funname)
-        tpe = ast.def_.sig.paramss.explicit.last.params.head.tpe
-        id = tpe.infixhead.compoundpre.head.id
+        explicit = ast.def_.sig.paramss.explicit
+        (explicit.e / _.rule).should.contain('paramClauses')
+        id = explicit.last.params.head.tpe.infixhead.compoundpre.head.id
         id.raw.should.contain(tpe3)
-        (id.e / _.rule).should.contain('id')
+        (id.e / _.rule).should.contain('plainid')
 
     def incomplete_fundef(self):
         ast = self._ast(incomplete_fundef, 'templateStat')
@@ -112,8 +114,6 @@ class ScalaSpec(Spec):
         ast.types.head.infixhead.compoundpre.head.id.raw.should.contain('A')
         ast.types.last.infixhead.compoundpre.head.id.raw.should.contain('Tpe6')
 
-    # FIXME ast is a list of lists
-    # also filter empty lists
     def pattern(self):
         ast = self._ast('a: Type', 'pattern')
         ast[2].infixhead.compoundpre.head.id.raw.should.contain('Type')

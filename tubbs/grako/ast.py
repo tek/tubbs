@@ -58,6 +58,8 @@ class AstList(AstElem):
             lambda: SubAstInvalid(key, self.rule, 'AstList index oob')
         )
 
+    __getitem__ = lift
+
     def copy(self, data):
         return AstList(data, self._rule)
 

@@ -53,19 +53,23 @@ stringLiteral =
   | singleLineStringLiteral
   | multiLineStringLiteral
   ;
-symbolLiteral = "'" plainid;
+symbolLiteral = "'" plainidName;
 
 # this is wrong
 comment = '/*' /./ '*/'
   | '//' /./;
 
 op = !arrow op:{Opchar}+;
-# @name plainid = /[A-Z$_a-z][A-Z$_a-z0-9]*/;
-plainid1(token) = Letter {Letter | Digit};
-@name plainid = plainid1;
-idOpSuffix = plainid Wildcard {Opchar}+;
+plainid(token) = Letter {Letter | Digit};
+@name plainidName = plainid;
+idOpSuffix = plainidName Wildcard {Opchar}+;
 quotedId = '`' stringLiteralData '`';
-id = idOpSuffix | plainid | op | quotedId;
+id =
+  | idOpSuffix
+  | plainidName
+  | op
+  | quotedId
+  ;
 
 case = 'case';
 match = 'match';
@@ -208,20 +212,20 @@ enumerators = generator {eol generator};
 generator = pattern1 '<-' expr {[eol] guard | eol pattern1 '=' expr};
 
 simplePattern = wildcard
-  | plainid
+  | plainidName
   | literal
   | stableId
   | stableId '(' [patterns] ')'
-  | stableId '(' [patterns ','] [plainid '@'] '_*)'
+  | stableId '(' [patterns ','] [plainidName '@'] '_*)'
   | '(' [patterns] ')';
 pattern3 = simplePattern
   | simplePattern { id [nl] simplePattern };
-pattern2 = plainid ['@' pattern3]
+pattern2 = plainidName ['@' pattern3]
   | pattern3;
 # cannot use `type` here, as it breaks case clauses by interpreting the arrow
 # as part of a function type
 pattern1 =
-  | (plainid | wildcard) ':' (infixExistentialType | functionType)
+  | (plainidName | wildcard) ':' (infixExistentialType | functionType)
   | pattern2;
 pattern = pattern1 { '|' pattern1 };
 patterns = pattern [',' patterns]

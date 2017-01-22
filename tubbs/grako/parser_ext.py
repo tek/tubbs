@@ -1,10 +1,12 @@
+from functools import namedtuple
+
 from grako.exceptions import FailedKeywordSemantics
 from grako.parsing import Parser as GrakoParser
 from grako.ast import AST
 from grako.contexts import Closure
 
 import amino
-from amino import L, _, List
+from amino import L, _, List, I
 from amino.lazy import lazy
 from amino.func import dispatch
 
@@ -52,7 +54,13 @@ class PostProc:
         return token
 
 
+FlattenToken = namedtuple('FlattenToken', 'data')
+
+
 class DataSemantics(Logging):
+
+    def __init__(self) -> None:
+        self._flattened = False
 
     def _special(self, ast, name):
         handler = getattr(self, '_special_{}'.format(name),
@@ -61,11 +69,11 @@ class DataSemantics(Logging):
 
     def _special_token(self, ast):
         raw = (flatten_list(ast) / _.raw).mk_string()
-        ref = ast if isinstance(ast, AstElem) else ast[0]
         ws_count = (ast[0].ws_count
                     if isinstance(ast, list) else
                     ast.ws_count)
-        return AstToken(raw, ref.pos, ref.rule, ws_count)
+        self._flattened = True
+        return AstToken(raw, 0, '', ws_count)
 
     def _no_special(self, name, ast):
         self.log.error('no handler for argument `{}` and {}'.format(name, ast))
@@ -74,6 +82,12 @@ class DataSemantics(Logging):
     def _default(self, ast, *a, **kw):
         ast1 = List.wrap(a).head / L(self._special)(ast, _) | ast
         return AstMap.from_ast(ast1) if isinstance(ast1, AST) else ast1
+
+    def _postproc(self, parser, data):
+        if self._flattened:
+            data._rule = parser._last_rule
+            data._pos = parser._last_pos
+            self._flattened = False
 
 
 class ParserExt(GrakoParser):
