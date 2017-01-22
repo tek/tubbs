@@ -14,10 +14,15 @@ def indent(strings):
     return strings.map('-' + _)
 
 
-def flatten_list(l):
-    def flat(l):
-        return flatten(map(flat, l)) if isinstance(l, list) else [l]
-    return List.wrap(flat(l))
+def flatten_list(data):
+    def flat(data):
+        l = data.data if isinstance(data, AstList) else data
+        return (
+            flatten(map(flat, l))
+            if isinstance(l, list) else
+            [l]
+        )
+    return List.wrap(flat(data))
 
 
 class Node(Logging, abc.ABC):

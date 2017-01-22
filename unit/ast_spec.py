@@ -58,4 +58,9 @@ class AstSpec(Spec):
         tree = Tree(ast)
         tree.root.sub[3].text.should.equal(clos)
 
+    def positive_closure(self):
+        data = 'tok: foo bar baz'
+        ast = self._ast(data, 'poswrap')
+        print(ast['pos'].id)
+
 __all__ = ('AstSpec',)

@@ -1,5 +1,5 @@
 import abc
-from typing import Callable, Union, TypeVar
+from typing import Callable, Union, TypeVar, Generic
 
 from grako.ast import AST
 
@@ -26,15 +26,23 @@ class AstElem(abc.ABC):
         return self.pos, self.endpos
 
 
-class AstList(AstElem, List):
+class AstList(AstElem):
 
-    def __init__(self, data, rule) -> None:
+    def __init__(self, data: List, rule: str) -> None:
+        self.data = data
         self._rule = rule
-        List.__init__(self, *data)
 
     @property
     def rule(self):
         return self._rule
+
+    @property
+    def head(self):
+        return self.lift(0)
+
+    @property
+    def last(self):
+        return self.lift(-1)
 
     @property
     def pos(self):
@@ -45,10 +53,27 @@ class AstList(AstElem, List):
         return self.last.e / _.endpos | -1
 
     def lift(self, key):
-        return super().lift(key).cata(
+        return self.data.lift(key).cata(
             L(SubAst.cons)(_, key, self.rule),
             lambda: SubAstInvalid(key, self.rule, 'AstList index oob')
         )
+
+    def copy(self, data):
+        return AstList(data, self._rule)
+
+    def cat(self, elem):
+        return self.copy(self.data.cat(elem))
+
+    @property
+    def ws_count(self):
+        return self.head / _.ws_count | 0
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, self.data.join_comma)
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__,
+                               (self.data / repr).join_comma)
 
 
 class AstToken(AstElem):
@@ -179,9 +204,9 @@ class SubAst(abc.ABC):
                 Left(self._no_token))
 
 
-class SubAstValid(SubAst):
+class SubAstValid(Generic[A], SubAst):
 
-    def __init__(self, data) -> None:
+    def __init__(self, data: A) -> None:
         self._data = data
 
     def __str__(self):
@@ -196,7 +221,7 @@ class SubAstValid(SubAst):
         return Right(self._data)
 
 
-class SubAstMap(SubAstValid):
+class SubAstMap(SubAstValid[AstMap]):
 
     def _getattr(self, key):
         return self._data.lift(key)
@@ -204,7 +229,7 @@ class SubAstMap(SubAstValid):
     _getitem = _getattr
 
 
-class SubAstList(SubAstValid):
+class SubAstList(SubAstValid[AstList]):
 
     @property
     def head(self):
@@ -224,10 +249,11 @@ class SubAstList(SubAstValid):
         return SubAst.from_maybe(m, key, self.rule, err)
 
     def __str__(self):
-        return '{}({})'.format(self.__class__.__name__, self._data.join_comma)
+        return '{}({})'.format(self.__class__.__name__,
+                               self._data.data.join_comma)
 
 
-class SubAstToken(SubAstValid):
+class SubAstToken(SubAstValid[AstToken]):
 
     def _getattr(self, key):
         return SubAstInvalid(key, self.rule,

@@ -7,3 +7,10 @@ ids = tok:tok l:id r:id;
 arg = ',' id;
 
 call = tok:tok lp:'(' first:id rest:{arg} rp:')';
+
+pos = {id:id}+ [tok];
+
+poswrap = tok:'tok' ':' [pos:pos];
+
+# error
+list = 'tok' ':' [pos];

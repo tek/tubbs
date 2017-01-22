@@ -134,8 +134,12 @@ ascription = ':' infixType
 patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:'{' [nl]
 cases:caseClauses [nl] rbrace:'}';
 
-@name postfixExpr = infixExpr id eol;
-@name infixExpr = infixExpr id [nl] infixExpr;
+postfixExpr = infixExpr id eol;
+infixOper =
+  | infixExpr
+  | simpleExpr
+  ;
+infixExpr = left:infixOper method:id [nl:nl] arg:infixOper;
 prefixOperator = '-' | '+' | '~' | '!';
 prefixExpr = prefix:prefixOperator expr:simpleExpr;
 argumentExprs =
@@ -239,7 +243,7 @@ tpUpperBound = '<:' type;
 tpViewBound = '<%' type;
 tpContextBound = ':' type;
 
-paramClauses = {params:paramClause}+ [implicits:implicitParamClause];
+paramClauses = explicit:{paramClause}+ [implicits:implicitParamClause];
 paramClause = [nl] lpar:'(' !'implicit' [params:params] rpar:')';
 implicitParamClause = [nl] lpar:'(' implicitkw:'implicit' params:params rpar:')';
 params = param {',' param};
@@ -341,12 +345,16 @@ blockRest =  eol:eol stat:blockStat;
 block = first:blockStat rest:{blockRest} [result:resultExpr];
 ccBlockExpr = lbrace:'{' [nl] cases:caseClauses [nl] rbrace:'}';
 simpleBlockExpr = lbrace:'{' [nl] block:block [nl] rbrace:'}';
-blockExpr = ccBlockExpr
-  | simpleBlockExpr;
+blockExpr =
+  | ccBlockExpr
+  | simpleBlockExpr
+  ;
 
-tmplDef = [case] 'class' classDef
+tmplDef =
+  | [case] 'class' classDef
   | [case] 'object' objectDef
-  | 'trait' traitDef;
+  | 'trait' traitDef
+  ;
 classDef = id [typeParamClause] {constrAnnotation} [accessModifier] classParamClauses classTemplateOpt;
 traitDef = id [typeParamClause] traitTemplateOpt;
 objectDef = id classTemplateOpt;

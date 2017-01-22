@@ -5,8 +5,10 @@ from tubbs.grako.scala import Parser
 
 funname = List.random_alpha(5)
 
-funsig = ('{}[A <: B: TCL](par1: Tpe1, par2: Tpe2)(par3: Tpe3)' +
-          '(implicit par4: Tpe4, par5: Tpe5)').format(funname)
+tpe3 = 'Tpe3'
+
+funsig = ('{}[A <: B: TCL](par1: Tpe1, par2: Tpe2)(par3: {})' +
+          '(implicit par4: Tpe4, par5: Tpe5)').format(funname, tpe3)
 
 typeargs = '[A, Tpe6]'
 
@@ -82,6 +84,10 @@ class ScalaSpec(Spec):
     def fundef(self):
         ast = self._ast(fundef, 'def')
         ast.def_.sig.id.raw.should.contain(funname)
+        tpe = ast.def_.sig.paramss.explicit.last.params.head.tpe
+        id = tpe.infixhead.compoundpre.head.id
+        id.raw.should.contain(tpe3)
+        (id.e / _.rule).should.contain('id')
 
     def incomplete_fundef(self):
         ast = self._ast(incomplete_fundef, 'templateStat')
@@ -158,5 +164,9 @@ class ScalaSpec(Spec):
     def blockExpr(self):
         ast = self._ast(blockExpr, 'blockExpr')
         ast.block.first.head.def_.rhs.head.raw.should.contain('1')
+
+    def infix(self):
+        ast = self._ast('foo boo\n zoo', 'infixExpr')
+        ast.arg.raw.should.contain('zoo')
 
 __all__ = ('ScalaSpec',)
