@@ -28,4 +28,18 @@ class ScalaSpec(TubbsPluginIntegrationSpec):
         self.vim.cmd_sync('normal dad')
         later(lambda: self.vim.buffer.line_count.should.equal(lines_pre - 4))
 
+
+class ScalaFormatSpec(TubbsPluginIntegrationSpec):
+
+    @property
+    def _scala_file(self):
+        return fixture_path('scala', 'format', 'file1.scala')
+
+    def format_def(self):
+        self.vim.edit(self._scala_file).run_sync()
+        self.vim.buffer.options.set('filetype', 'scala')
+        self.vim.buffer.options.set('textwidth', 10)
+        self.json_cmd_sync('TubFormatRange', start=5)
+        self._buffer_length(12)
+
 __all__ = ('ScalaSpec',)

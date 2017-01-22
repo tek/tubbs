@@ -8,9 +8,11 @@ from amino import __, L, _, Task, Either, Maybe, Right, List
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
-from tubbs.plugins.core.message import StageI, AObj, Select, Format, FormatLine
+from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
+                                        FormatRange)
 from tubbs.plugins.core.crawler import Crawler
 from tubbs.grako.base import ParserBase
+from tubbs.formatter.tree import Tree
 
 
 class CoreTransitions(TubbsTransitions):
@@ -28,19 +30,27 @@ class CoreTransitions(TubbsTransitions):
         self.log.debug(f'selecting {self.msg.tpe} {self.msg.ident}')
         return self.with_match_msg(L(self.visual)(self.msg.tpe, _)).lmap(Fatal)
 
-    @handle(FormatLine)
-    def format_line(self):
-        line = self.msg.options.get('line').o(lambda: self.vim.window.line)
-        load = lambda num: self.load_and_run(L(Format)(_, (num, num)) >> Right)
-        return line.to_either(Fatal('could not get a line')) // load
+    @handle(FormatRange)
+    def format_range(self):
+        start = self.msg.options.get('start').o(lambda: self.vim.window.line)
+        end = self.msg.options.get('end').o(start)
+        load = lambda s, e: self.load_and_run(L(Format)(_, (s, e)) >> Right)
+        return (
+            (start & end)
+            .to_either(Fatal('invalid range for formatting'))
+            .flat_map2(load)
+            .lmap(Fatal)
+        )
 
     @handle(Format)
     def format(self):
+        start, end = self.msg.range
+        vim_range = start - 1, end
         return (
             (self.data.parser(self.msg.parser) &
              self.formatters(self.msg.parser))
             .map2(L(self._format)(_, _, self.msg.range)) /
-            L(self.update_range)(_, self.msg.range)
+            L(self.update_range)(_, vim_range)
         ).lmap(Fatal)
 
     @property
@@ -60,15 +70,15 @@ class CoreTransitions(TubbsTransitions):
 
     def lang_formatters(self, name):
         return (
-            List('Formatter', 'Breaker', 'Indenter')
+            List('VimFormatter', 'VimBreaker', 'VimIndenter')
             .map(L(self.lang_formatter)(name, _))
             .sequence(Either)
         )
 
     def lang_formatter(self, lang, name):
-        self.log.verbose(name)
         mod = 'tubbs.formatter'
-        return Either.import_name('{}.{}'.format(mod, lang), name) / __()
+        return (Either.import_name('{}.{}'.format(mod, lang), name) /
+                __(self.vim))
 
     def with_match_msg(self, f: Callable[[ParserBase], Either]):
         return (self.data.parser(self.msg.parser) //
@@ -93,6 +103,22 @@ class CoreTransitions(TubbsTransitions):
 
     def lang_hints(self, name):
         return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
+
+    def _format(self, parser, formatters, rng):
+        rule = 'templateStat'
+        start, end = rng
+        content = self.vim.buffer.content[start - 1:end]
+        def run(lines: List[str], formatter):
+            return (
+                parser.parse(lines.join_lines, rule) /
+                Tree //
+                formatter.format |
+                lines
+            )
+        return formatters.fold_left(content)(run)
+
+    def update_range(self, lines, rng):
+        return io(__.buffer.set_content(lines, rng=slice(*rng)))
 
 
 class Plugin(TubbsComponent):

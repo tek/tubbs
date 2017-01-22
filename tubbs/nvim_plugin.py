@@ -1,11 +1,12 @@
 from ribosome import command, NvimStatePlugin, msg_command, NvimFacade
-from ribosome.request import msg_function
+from ribosome.request import msg_function, json_msg_command
 
 from tubbs.main import Tubbs
 
 from amino import List
 from tubbs.logging import Logging
-from tubbs.plugins.core.message import AObj, StageI, AObjRule, IObj, IObjRule
+from tubbs.plugins.core.message import (AObj, StageI, AObjRule, IObj, IObjRule,
+                                        Format, FormatRange)
 
 
 class TubbsNvimPlugin(NvimStatePlugin, Logging):
@@ -60,6 +61,14 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
 
     @msg_command(IObjRule)
     def tub_i_rule(self):
+        pass
+
+    @msg_command(Format)
+    def tub_format(self):
+        pass
+
+    @json_msg_command(FormatRange)
+    def tub_format_range(self):
         pass
 
 __all__ = ('TubbsNvimPlugin',)

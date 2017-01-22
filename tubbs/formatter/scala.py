@@ -1,25 +1,34 @@
-from amino import Left, List
+from amino import Left
 from amino.util.string import snake_case
+
+from ribosome.util.callback import VimCallback
 
 from tubbs.formatter import base
 from tubbs.formatter.base import BuiltinFormatter, BreakRules, IndentRules
 from tubbs.grako.ast import AstMap
+from tubbs.formatter.tree import Tree
 
 
 class Formatter(BuiltinFormatter):
 
-    def no_rule(self, ast):
-        return Left('cannot format rule `{}`'.format(ast.parseinfo.rule))
+    def no_rule(self, tree):
+        return Left('cannot format rule `{}`'.format(tree.info.rule))
 
     def _format_rule(self, ast: AstMap):
         handler = getattr(self, snake_case(ast.rule), self.no_rule)
         return handler(ast)
 
-    def format(self, ast: AstMap, lines):
-        return self._format_rule(ast)
+    def format(self, ast: Tree):
+        return self._format_rule(ast.root)
 
     def template_stat(self, ast):
         return Left('NI')
+
+
+class VimFormatter(Formatter):
+
+    def __init__(self, vim) -> None:
+        pass
 
 
 class ScalaBreakRules(BreakRules):
@@ -40,6 +49,13 @@ class Breaker(base.Breaker):
         super().__init__(ScalaBreakRules(), textwidth)
 
 
+class VimBreaker(Breaker, VimCallback):
+
+    def __init__(self, vim) -> None:
+        tw = vim.buffer.options('textwidth') | 80
+        super().__init__(tw)
+
+
 class ScalaIndentRules(IndentRules):
 
     def case_clause_first(self, node):
@@ -57,4 +73,12 @@ class Indenter(base.Indenter):
     def __init__(self, shiftwidth) -> None:
         super().__init__(ScalaIndentRules(), shiftwidth)
 
-__all__ = ('Formatter', 'Breaker', 'Indenter')
+
+class VimIndenter(Indenter):
+
+    def __init__(self, vim) -> None:
+        sw = vim.options('shiftwidth') | 2
+        super().__init__(sw)
+
+__all__ = ('Formatter', 'Breaker', 'Indenter', 'VimFormatter', 'VimBreaker',
+           'VimIndenter')

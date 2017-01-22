@@ -62,7 +62,7 @@ class AstSpec(Spec):
     def positive_closure(self):
         data = 'tok: foo bar baz'
         ast = self._ast(data, 'poswrap')
-        print(ast.clos.id)
+        ast.clos.id
 
     def whitespace(self):
         i = 4

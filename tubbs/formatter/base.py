@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Sized
 
-from amino import Either, List, L, Boolean, _, __
+from amino import Either, List, L, Boolean, _, __, Left, Right
 from amino.util.string import snake_case
 from amino.func import dispatch
 
@@ -62,7 +62,10 @@ class Breaker(Formatter):
 
     def format(self, tree: Tree):
         breaks = self.breaks(tree.root)
-        return self.apply_breaks(tree, breaks)
+        return Right(self.apply_breaks(tree, breaks))
+
+    def __call__(self, tree: Tree):
+        return self.format(tree)
 
     def apply_breaks(self, tree, breaks):
         return (tree.lines
@@ -181,7 +184,15 @@ class Indenter(Formatter):
 
     def indent(self, baseline: int, lines: List[str], indents: List[int]
                ) -> List[str]:
-        root_indent = baseline / self.shiftwidth
+        if len(lines) != len(indents):
+            return Left('got {} idents for {} lines'.format(len(indents),
+                                                            len(lines)))
+        else:
+            root_indent = baseline / self.shiftwidth
+            data = lines.zip(indents)
+            return Right(self._indent1(data, root_indent))
+
+    def _indent1(self, data, root_indent):
         def shift(z, a):
             current_indent, result = z
             line, indent = a
@@ -189,6 +200,6 @@ class Indenter(Formatter):
             line_indent = int(self.shiftwidth * new_indent)
             new_line = '{}{}'.format(' ' * line_indent, line.strip())
             return new_indent, result.cat(new_line)
-        return lines.zip(indents).fold_left((root_indent, List()))(shift)[1]
+        return data.fold_left((root_indent, List()))(shift)[1]
 
 __all__ = ('Formatter', 'BuiltinFormatter', 'Breaker', 'Indenter')
