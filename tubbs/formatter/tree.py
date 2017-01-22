@@ -52,6 +52,10 @@ class Node(Logging, abc.ABC):
     def pos(self):
         return self.data.pos
 
+    @property
+    def endpos(self):
+        return self.data.endpos
+
     @abc.abstractproperty
     def pos_with_ws(self) -> int:
         ...
@@ -140,11 +144,15 @@ class MapNode(Inode):
 
     @lazy
     def text(self):
-        return self.info.buffer.text[self.info.pos:self.info.endpos]
+        return self.info.buffer.text[self.pos:self.endpos]
+
+    @lazy
+    def with_ws(self):
+        return self.info.buffer.text[self.pos_with_ws:self.endpos]
 
     @property
     def lines(self):
-        return List.lines(self.text)
+        return List.lines(self.with_ws)
 
     @lazy
     def sub(self):
@@ -277,7 +285,7 @@ class Tree(Logging):
         return node('root', self.ast, self)
 
     def __str__(self):
-        return str(self.root)
+        return 'Tree({})'.format(self.root)
 
     @property
     def lines(self):

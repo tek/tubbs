@@ -66,16 +66,19 @@ class AstSpec(Spec):
 
     def whitespace(self):
         i = 4
-        data = '{}tok: foo,  bar,baz'.format(' ' * i)
+        ws = ' ' * i
+        data = '{}tok: foo,  bar,baz'.format(ws)
         ast = self._ast(data, 'ws')
         tree = Tree(ast)
-        tree.root.indent.should.equal(i)
-        args = (tree.root.sub.last / _.sub).x
+        root = tree.root
+        root.indent.should.equal(i)
+        args = (root.sub.last / _.sub).x
         indent = lambda i: (args.lift(i) / _.indent)
         indent(0).should.contain(1)
         indent(1).should.contain(0)
         indent(2).should.contain(2)
         indent(3).should.contain(0)
         indent(4).should.contain(0)
+        root.with_ws.should.equal(data)
 
 __all__ = ('AstSpec',)
