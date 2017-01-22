@@ -248,8 +248,10 @@ tpViewBound = '<%' type;
 tpContextBound = ':' type;
 
 paramClauses = explicit:{paramClause}+ [implicits:implicitParamClause];
-paramClause = [nl] lpar:'(' !'implicit' [params:params] rpar:')';
-implicitParamClause = [nl] lpar:'(' implicitkw:'implicit' params:params rpar:')';
+paramClause = [nl1:nl] lpar:'(' [nl2:nl] !'implicit' [params:params] [nl3:nl]
+rpar:')';
+implicitParamClause = [nl1:nl] lpar:'(' [nl2:nl] implicitkw:'implicit' [nl3:nl]
+params:params [nl4:nl] rpar:')';
 params = param {',' param};
 param = {anno:annotation} id:id [colon:':' tpe:paramType] [assign:'='
 rhs:expr];

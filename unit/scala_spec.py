@@ -57,6 +57,17 @@ blockExpr = '''{{
 {}
 }}'''.format(block)
 
+broken_lines = '''  def fun1[TPar1 <: UB1: TC1]
+(
+par1: Tpe1
+)
+(
+par2: Tpe2
+)
+(
+implicit par3: Tpe3, par4: Tpe4
+) = { val v1 = fun2(par1); fun3(v1) }'''
+
 
 class ScalaSpec(Spec):
 
@@ -168,5 +179,14 @@ class ScalaSpec(Spec):
     def infix(self):
         ast = self._ast('foo boo\n zoo', 'infixExpr')
         ast.arg.raw.should.contain('zoo')
+
+    def whitespace(self):
+        i = 3
+        ast = self._ast('{}def foo = 1'.format(' ' * i), 'def')
+        ast.defkw._data.ws_count.should.equal(i)
+
+    def broken(self):
+        ast = self._ast(broken_lines, 'def')
+        ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
 
 __all__ = ('ScalaSpec',)
