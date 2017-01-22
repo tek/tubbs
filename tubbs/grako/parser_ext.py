@@ -6,7 +6,7 @@ from grako.ast import AST
 from grako.contexts import Closure
 
 import amino
-from amino import L, _, List, I
+from amino import L, _, List
 from amino.lazy import lazy
 from amino.func import dispatch
 
@@ -27,30 +27,30 @@ def check_list(l, rule):
 
 class PostProc:
 
-    def __call__(self, ast, rule, pos, last_ws):
-        return self.wrap_data(ast, rule, pos, last_ws)
+    def __call__(self, ast, parser, rule):
+        return self.wrap_data(ast, parser, rule)
 
     @lazy
     def wrap_data(self):
         return dispatch(self, [str, list, AstList, AstMap, AstToken, Closure],
                         'wrap_')
 
-    def wrap_str(self, raw, rule, pos, last_ws):
-        return AstToken(raw, pos, rule, last_ws)
+    def wrap_str(self, raw, parser, rule):
+        return AstToken(raw, parser._last_pos, rule, parser._take_ws())
 
-    def wrap_list(self, raw, rule, pos, last_ws):
+    def wrap_list(self, raw, parser, rule):
         return AstList(flatten_list(raw), rule)
 
-    def wrap_ast_list(self, ast, rule, pos, last_ws):
+    def wrap_ast_list(self, ast, parser, rule):
         return ast
 
-    def wrap_closure(self, raw, rule, pos, last_ws):
-        return self.wrap_list(raw, rule, pos, last_ws)
+    def wrap_closure(self, raw, parser, rule):
+        return self.wrap_list(raw, parser, rule)
 
-    def wrap_ast_map(self, ast, rule, pos, last_ws):
+    def wrap_ast_map(self, ast, parser, rule):
         return ast
 
-    def wrap_ast_token(self, token, rule, pos, last_ws):
+    def wrap_ast_token(self, token, parser, rule):
         return token
 
 
@@ -102,7 +102,7 @@ class ParserExt(GrakoParser):
         return PostProc()
 
     def _wrap_data(self, node, name):
-        return self.post_proc(node, name, self._last_pos, self._last_ws)
+        return self.post_proc(node, self, name)
 
     @property
     def _last_rule(self):
@@ -112,13 +112,20 @@ class ParserExt(GrakoParser):
     def _last_pos(self):
         return self._pos_stack[-1]
 
+    def _take_ws(self):
+        ws = self._last_ws
+        self._last_ws = 0
+        return ws
+
     def _next_token(self):
         pre_pos = self._pos
         super()._next_token()
         pos = self._pos
         self._pos_stack.pop()
         self._pos_stack.append(pos)
-        self._last_ws = pos - pre_pos
+        ws = pos - pre_pos
+        if ws > 0:
+            self._last_ws = ws
 
     def _call(self, rule, name, params, kwparams):
         self._pos_stack.append(self._pos)
