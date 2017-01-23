@@ -1,4 +1,5 @@
 import amino.logging
+import ribosome.logging
 from ribosome.logging import ribosome_logger
 
 from amino.lazy import lazy
@@ -11,7 +12,7 @@ def tubbs_logger(name: str):
     return tubbs_root_logger.getChild(name)
 
 
-class Logging(amino.logging.Logging):
+class Logging(ribosome.logging.Logging):
 
     @lazy
     def _log(self) -> amino.logging.Logger:
