@@ -12,7 +12,7 @@ from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
                                         FormatRange)
 from tubbs.plugins.core.crawler import Crawler
 from tubbs.grako.base import ParserBase
-from tubbs.formatter.tree import Tree
+from tubbs.formatter.facade import FormattingFacade
 
 
 class CoreTransitions(TubbsTransitions):
@@ -27,7 +27,7 @@ class CoreTransitions(TubbsTransitions):
 
     @handle(Select)
     def select(self):
-        self.log.debug(f'selecting {self.msg.tpe} {self.msg.ident}')
+        self.log.debug('selecting {} {}'.format(self.msg.tpe, self.msg.ident))
         return self.with_match_msg(L(self.visual)(self.msg.tpe, _)).lmap(Fatal)
 
     @handle(FormatRange)
@@ -89,7 +89,7 @@ class CoreTransitions(TubbsTransitions):
         return self.crawler(parser).find_and_parse(ident) // f
 
     def visual(self, tpe, match) -> Either:
-        self.log.debug(f'attempting to select {match}')
+        self.log.debug('attempting to select {}'.format(match))
         return (
             match.range1
             .map2(L(Task.delay)(self.vim.window.visual_line, _, _)) /
@@ -104,18 +104,13 @@ class CoreTransitions(TubbsTransitions):
     def lang_hints(self, name):
         return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
 
+    # TODO determine rule
+    # parse whole file, select smallest rule containing the range, use indent
+    # of parent
     def _format(self, parser, formatters, rng):
-        rule = 'templateStat'
         start, end = rng
         content = self.vim.buffer.content[start - 1:end]
-        def run(lines: List[str], formatter):
-            return (
-                parser.parse(lines.join_lines, rule) /
-                Tree //
-                formatter.format |
-                lines
-            )
-        return formatters.fold_left(content)(run)
+        return FormattingFacade(parser, formatters).format(content)
 
     def update_range(self, lines, rng):
         return io(__.buffer.set_content(lines, rng=slice(*rng)))

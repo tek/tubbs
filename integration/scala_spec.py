@@ -2,6 +2,7 @@ from integration._support.base import TubbsPluginIntegrationSpec
 
 from amino.test.path import fixture_path
 from amino.test import later
+from amino import List
 
 
 class ScalaSpec(TubbsPluginIntegrationSpec):
@@ -29,6 +30,20 @@ class ScalaSpec(TubbsPluginIntegrationSpec):
         later(lambda: self.vim.buffer.line_count.should.equal(lines_pre - 4))
 
 
+format_def_target = '''package pack
+
+object Ob1
+{
+  def fun1[TPar1 <: UB1: TC1]
+  (par1a: Tpe1, par1b: Tpe1)
+  (par2a: Tpe2, par2b: Tpe2)
+  (implicit par3: Tpe3, par4: Tpe4) = {
+    val v1 = fun2(par1);
+    fun3(v1)
+  }
+}'''
+
+
 class ScalaFormatSpec(TubbsPluginIntegrationSpec):
 
     @property
@@ -38,8 +53,8 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
     def format_def(self):
         self.vim.edit(self._scala_file).run_sync()
         self.vim.buffer.options.set('filetype', 'scala')
-        self.vim.buffer.options.set('textwidth', 10)
+        self.vim.buffer.options.set('textwidth', 40)
         self.json_cmd_sync('TubFormatRange', start=5)
-        self._buffer_length(12)
+        self._buffer_content(List.lines(format_def_target))
 
 __all__ = ('ScalaSpec',)

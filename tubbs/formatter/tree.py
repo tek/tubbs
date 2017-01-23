@@ -1,7 +1,7 @@
 import abc
 from typing import Tuple, Callable
 
-from amino import List, L, _, __, Boolean
+from amino import List, L, _, __, Boolean, Either, Right
 from amino.lazy import lazy
 from amino.list import flatten
 from amino.func import is_not_none
@@ -107,7 +107,7 @@ class Inode(Node):
         ...
 
     @abc.abstractmethod
-    def sub_range(self, name) -> Tuple[int, int]:
+    def sub_range(self, name) -> Either[str, Tuple[int, int]]:
         ...
 
     @property
@@ -173,7 +173,7 @@ class MapNode(Inode):
         return indent(self.sub // _.strings).cons(self._desc)
 
     def sub_range(self, name):
-        return self.data.lift(name).e / _.range | (0, 0)
+        return self.data.lift(name).e / _.range
 
 
 class ListNode(Inode):
@@ -200,7 +200,11 @@ class ListNode(Inode):
         return (self.sub / _.with_ws).mk_string()
 
     def sub_range(self, name):
-        raise Exception('not implemented')
+        return (
+            self.sub.find(_.key == name)
+            .to_either('{} not in {}'.format(name, self)) /
+            _.range
+        )
 
 
 class TokenNode(Node):
@@ -226,9 +230,7 @@ class TokenNode(Node):
         return self.parent.rule
 
     def sub_range(self, name):
-        return (self.data.range
-                if isinstance(self.data, AstToken) else
-                self.parent.sub_range(self.key))
+        return Right(self.data.range)
 
     @property
     def range(self):

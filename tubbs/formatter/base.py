@@ -68,6 +68,7 @@ class Breaker(Formatter):
         return self.format(tree)
 
     def apply_breaks(self, tree, breaks):
+        self.log.debug('applying breaks: {}'.format(breaks))
         return (tree.lines
                 .zip(bols(tree))
                 .flat_map2(L(self.break_line)(_, breaks, _)))
@@ -76,23 +77,37 @@ class Breaker(Formatter):
                    ) -> List[str]:
         def brk(cur, brks, start):
             end = start + len(cur)
-            qual = brks.filter(lambda a: start < a.position < end)
-            def rec(pos):
+            qualified = brks.filter(lambda a: start < a.position < end)
+            def rec1(pos):
                 local_pos = pos - start
-                return (brk(cur[:local_pos], qual, start) +
-                        brk(cur[local_pos:], qual, pos))
-            return (
-                Boolean(len(cur) > self.textwidth).maybe(qual) //
-                __.max_by(_.prio) /
-                _.position /
-                rec |
-                List(cur)
-            )
+                self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
+                left = cur[:local_pos]
+                right = cur[local_pos:]
+                self.log.ddebug(
+                    'broke line into\n{}\n{}'.format(left, right))
+                return brk(left, qualified, start) + brk(right, qualified, pos)
+            def rec0(brk):
+                msg = 'line did not exceed tw: {}'
+                return (
+                    Boolean(len(cur) > self.textwidth or brk.prio >= 1.0)
+                    .e(msg.format(cur), brk.position) /
+                    rec1
+                )
+            broken = (
+                qualified.max_by(_.prio)
+                .to_either('no breaks for {}'.format(cur)) //
+                rec0
+            ).leffect(self.log.ddebug)
+            return broken | List(cur)
         return brk(line, breaks, line_start)
 
     def _handler(self, node, tmpl):
         def handler(suf: str, or_else: Callable=lambda: None):
-            h = getattr(self.rules, tmpl.format(suf), None)
+            attr = tmpl.format(suf)
+            self.log.ddebug('trying break handler {}'.format(attr))
+            h = getattr(self.rules, attr, None)
+            if h is not None:
+                self.log.ddebug('success')
             return h or or_else() or self.rules.default
         rule = snake_case(node.rule)
         return handler(
@@ -104,10 +119,16 @@ class Breaker(Formatter):
         result = self._handler(node, tmpl)(node)
         is_break = lambda a: isinstance(a, Sized) and len(a) == 3
         def mkbreak(position, prio):
-            return Boolean(prio > 0).maybe(Break(position=position, prio=prio))
+            return Boolean(prio > 0).e(
+                'break prio 0',
+                Break(position=position, prio=prio)
+            )
         def mkbreaks(name, before, after):
-            start, end = node.sub_range(name)
-            return List((start, before), (end, after)).flat_map2(mkbreak)
+            return node.sub_range(name).flat_map2(
+                lambda start, end:
+                List((start, before), (end, after))
+                .flat_map2(mkbreak)
+            )
         def mkbreakss(a):
             return mkbreaks(*a) if is_break(a) else List()
         return (result // mkbreakss

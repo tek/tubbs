@@ -1,5 +1,6 @@
 from amino.test import Spec
 from amino.lazy import lazy
+from amino import _
 
 from tubbs.grako.scala import Parser
 from tubbs.formatter.tree import Tree, ListNode
@@ -64,12 +65,12 @@ class FormatTreeSpec(Spec):
     def break_fun(self):
         breaker = Breaker(37)
         broken = breaker.format(self._fun_tree)
-        broken.join_lines.must.equal(broken_fun)
+        (broken / _.join_lines).must.contain(broken_fun)
 
     def indent_broken(self):
         indenter = Indenter(2)
         tree = self._broken_fun_tree
         indented = indenter.format(tree)
-        indented.join_lines.should.equal(formatted_fun)
+        (indented / _.join_lines).should.contain(formatted_fun)
 
 __all__ = ('FormatTreeSpec',)
