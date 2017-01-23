@@ -68,6 +68,15 @@ par2: Tpe2
 implicit par3: Tpe3, par4: Tpe4
 ) = { val v1 = fun2(par1); fun3(v1) }'''
 
+broken_lines_2 = '''  def fun1[TPar1 <: UB1: TC1]
+(par1a: Tpe1, par1b: Tpe1)
+(par2a: Tpe2, par2b: Tpe2)
+(
+implicit par3: Tpe3, par4: Tpe4) = {
+val v1 = fun2(par1);
+ fun3(v1)
+}'''
+
 
 class ScalaSpec(Spec):
 
@@ -187,6 +196,10 @@ class ScalaSpec(Spec):
 
     def broken(self):
         ast = self._ast(broken_lines, 'def')
+        ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
+
+    def broken2(self):
+        ast = self._ast(broken_lines_2, 'def')
         ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
 
 __all__ = ('ScalaSpec',)

@@ -4,7 +4,8 @@
 # @@keyword :: null this
 
 nl = {'\n'}+;
-eol = ';' | nl;
+seminl = ';' [nl];
+eol = nl | seminl;
 
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
@@ -347,7 +348,7 @@ blockStat =
   | blockStatTemplDef
   | expr1
   ;
-blockRest =  eol:eol stat:blockStat;
+blockRest = eol:eol stat:blockStat;
 block = first:blockStat rest:{blockRest} [result:resultExpr];
 ccBlockExpr = lbrace:'{' [nl] cases:caseClauses [nl] rbrace:'}';
 simpleBlockExpr = lbrace:'{' [nl] block:block [nl] rbrace:'}';
