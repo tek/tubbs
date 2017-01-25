@@ -9,18 +9,19 @@ eol = nl | seminl;
 
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
-whiteSpace = '\u0020' | '\u0009' | '\u000D' | '\u000A';
+WhiteSpace = '\u0020' | '\u0009' | '\u000D' | '\u000A';
 Upper = /[A-Z$_]/;
 Lower = /[a-z]/;
 Letter = Upper | Lower;
 Digit = /\d/;
 paren = '(' | ')' | '[' | ']' | '{' | '}';
 delim = '`' | "'" | '"' | '.' | ';' | ',';
+assign = '=';
 wildcard = '_';
 Wildcard = '_';
 arrow = '=>';
 projectOp = '#';
-Opchar = (!(whiteSpace | Upper | Lower | Letter | Digit | paren | delim)) PrintableChar;
+Opchar = (!(WhiteSpace | Upper | Lower | Letter | Digit | paren | delim)) PrintableChar;
 PrintableChar = /[\u0020-\u007F]/;
 CharEscapeSeq = '\' ('b' | 't' | 'n' | 'f' | 'r' | '"' | "'" | '\');
 
@@ -56,11 +57,18 @@ stringLiteral =
   ;
 symbolLiteral = "'" plainidName;
 
-# this is wrong
-comment = '/*' /./ '*/'
-  | '//' /./;
+blockCommentEnd = '*/';
+blockCommentChar1 = /./ | nl;
+blockCommentChar = !blockCommentEnd blockCommentChar1;
+eolCommentChar = !nl /./;
+blockCommentContent(token) = {blockCommentChar};
+eolCommentContent(token) = {eolCommentChar};
+comment =
+  | '/*' blockCommentContent blockCommentEnd
+  | '//' eolCommentContent &nl
+  ;
 
-op = !arrow op:{Opchar}+;
+op = !(arrow | assign) op:{Opchar}+;
 plainid(token) = Letter {Letter | Digit};
 @name plainidName = plainid;
 idOpSuffix = plainidName Wildcard {Opchar}+;
@@ -147,15 +155,28 @@ infixOper =
 infixExpr = left:infixOper method:id [nl:nl] arg:infixOper;
 prefixOperator = '-' | '+' | '~' | '!';
 prefixExpr = prefix:prefixOperator expr:simpleExpr;
-argumentExprs =
-  | '(' [exprs ','] simpleOrCompoundExpr ':' wildcard '*' ')'
-  | '(' [exprs] ')'
-  | [nl] blockExpr
-  ;
-# accidentally deleted its usage
+simpleAssignExpr = [pre:simpleExpr dot:'.'] id:id assign:'=' rhs:expr;
+applyAssignExpr = simpleExpr1 argumentsExpr '=' expr;
 assignExpr =
-  | [simpleExpr '.'] id '=' expr
-  | simpleExpr1 argumentExprs '=' expr
+  | simpleAssignExpr
+  | applyAssignExpr
+  ;
+argumentExpr =
+  | simpleAssignExpr
+  | expr
+  ;
+argumentExprsTail = comma:',' arg:argumentExpr;
+argumentExprs = first:argumentExpr rest:{argumentExprsTail};
+arguments = lpar:'(' [args:argumentExprs] rpar:')';
+splat = expr:simpleOrCompoundExpr colon:':' wildcard:wildcard aster:'*';
+argumentsWithSplat =
+  lpar:'(' regular:[args:argumentExprs comma:','] splat:splat rpar:')';
+# FIXME nl before blockExpr? foo { a } is ok, but foo \n { a }?
+argumentsBlock = [nl] blockExpr;
+argumentsExpr =
+  | argumentsWithSplat
+  | arguments
+  | argumentsBlock
   ;
 simpleApplyExprPre =
   | literal
@@ -165,7 +186,7 @@ simpleApplyExprPre =
   | path
   | simpleExprAttr
   ;
-simpleApplyExpr = simpleApplyExprPre {argumentExprs}+;
+simpleApplyExpr = simpleApplyExprPre {argumentsExpr}+;
 simpleExprAttr = simpleExpr '.' id;
 simpleExpr1 =
   | literal
@@ -190,6 +211,9 @@ etaExpansion = simpleExpr1 wildcard;
   | postfixExpr
   | simpleExpr
   ;
+
+bindings = '(' binding {',' binding} ')';
+binding = (id | wildcard) [':' type];
 
 @name expr =
   | (bindings | ['implicit'] id | wildcard) arrow expr
@@ -248,26 +272,25 @@ tpUpperBound = '<:' type;
 tpViewBound = '<%' type;
 tpContextBound = ':' type;
 
-paramClauses = explicit:{paramClause}+ [implicits:implicitParamClause];
-paramClause = [nl1:nl] lpar:'(' [nl2:nl] !'implicit' [params:params] [nl3:nl]
-rpar:')';
-implicitParamClause = [nl1:nl] lpar:'(' [nl2:nl] implicitkw:'implicit' [nl3:nl]
-params:params [nl4:nl] rpar:')';
-params = param {',' param};
-param = {anno:annotation} id:id [colon:':' tpe:paramType] [assign:'='
-rhs:expr];
 paramTypeLazy = arrow type;
 paramTypeVariant = type '*';
 paramType =
   | type
   | paramTypeLazy
   | paramTypeVariant;
-classParamClauses = {classParamClause} [[nl] '(' 'implicit' classParams ')'];
-classParamClause = [nl] '(' [classParams] ')';
-classParams = classParam {',' classParam};
+param = {anno:annotation} id:id [colon:':' tpe:paramType] [assign:'='
+rhs:expr];
+params = param {',' param};
+paramClause = [nl1:nl] lpar:'(' [nl2:nl] !'implicit' [params:params] [nl3:nl]
+rpar:')';
+implicitParamClause = [nl1:nl] lpar:'(' [nl2:nl] implicitkw:'implicit' [nl3:nl]
+params:params [nl4:nl] rpar:')';
+paramClauses = explicit:{paramClause}+ [implicits:implicitParamClause];
+
 classParam = {annotation} {modifier} [('val' | 'var')] id ':' paramType [' = ' expr];
-bindings = '(' binding {',' binding} ')';
-binding = (id | wildcard) [':' type];
+classParams = classParam {',' classParam};
+classParamClause = [nl] '(' [classParams] ')';
+classParamClauses = {classParamClause} [[nl] '(' 'implicit' classParams ')'];
 
 modifier = localModifier
   | accessModifier
@@ -280,10 +303,9 @@ localModifier = 'abstract'
 accessModifier = ('private' | 'protected') [accessQualifier];
 accessQualifier = '[' (id | 'this') ']';
 
-annotation = '@' regularType {argumentExprs};
-constrAnnotation = '@' regularType argumentExprs;
+annotation = '@' regularType {argumentsExpr};
+constrAnnotation = '@' regularType argumentsExpr;
 
-templateBody = [nl] '{' [selfType] templateStat {eol templateStat} '}';
 templateStatDef = {anno:annotation [nl]} {mod:modifier} def:def;
 templateStatDcl = {anno:annotation [nl]} {mod:modifier} dcl:dcl;
 templateStat =
@@ -291,11 +313,13 @@ templateStat =
   | templateStatDef
   | templateStatDcl
   | expr;
+templateStats = [selfType] [nl] [templateStat {eol templateStat}];
+templateBody = [nl] '{' [nl] templateStats [nl] '}';
 selfType = id [':' type] arrow
   | 'this' ':' type arrow;
 
 import = 'import' importExpr {',' importExpr};
-importExpr = stableId '.' (id | wildcard | importSelectors);
+importExpr = {stableId '.'}+ (id | wildcard | importSelectors);
 importSelectors = '{' {importSelector ','} (importSelector | wildcard) '}';
 importSelector = id [arrow id | arrow wildcard];
 
@@ -314,7 +338,7 @@ varDef = patDef
 
 funSig = id:id [nl1:nl] [tparams:funTypeParamClause] [nl2:nl]
 [paramss:paramClauses];
-funDefFull = sig:funSig [nl:nl] [colon:':' type:type] assign:'=' rhs:expr;
+funDefFull = sig:funSig [nl1:nl] [colon:':' [nl2:nl] type:type] [nl3:nl] assign:'=' [nl4:nl] rhs:expr;
 funDefUnit = sig:funSig [nl:nl] '{' rhs:block '}';
 funDefCtor = 'this' paramClauses (' = ' constrExpr | [nl] constrBlock);
 funDef1 =
@@ -343,6 +367,7 @@ resultExpr = expr1
 blockStatDef = {annotation} ['implicit' | 'lazy'] def;
 blockStatTemplDef = {annotation} {localModifier} tmplDef;
 blockStat =
+  | comment
   | import
   | blockStatDef
   | blockStatTemplDef
@@ -357,13 +382,8 @@ blockExpr =
   | simpleBlockExpr
   ;
 
-tmplDef =
-  | [case] 'class' classDef
-  | [case] 'object' objectDef
-  | 'trait' traitDef
-  ;
 classDef = id [typeParamClause] {constrAnnotation} [accessModifier] classParamClauses classTemplateOpt;
-traitDef = id [typeParamClause] traitTemplateOpt;
+traitDef = [nl] id [nl] [typeParamClause] [nl] traitTemplateOpt;
 objectDef = id classTemplateOpt;
 classTemplateOpt = 'extends' classTemplate | [['extends'] templateBody];
 traitTemplateOpt = 'extends' traitTemplate | [['extends'] templateBody];
@@ -371,21 +391,33 @@ classTemplate = [earlyDefs] classParents [templateBody];
 traitTemplate = [earlyDefs] traitParents [templateBody];
 classParents = constr {'with' annotType};
 traitParents = annotType {'with' annotType};
-constr = annotType {argumentExprs};
-earlyDefs = '{' [earlyDef {eol earlyDef}] '}' 'with';
+constr = annotType {argumentsExpr};
+earlyDefs = '{' [nl] [earlyDef {eol earlyDef}] [nl] '}' [nl] 'with';
 earlyDef = {annotation [nl]} {modifier} patVarDef;
+class = [case] 'class' classDef;
+module = [case] 'object' objectDef;
+trait = 'trait' traitDef;
+tmplDef =
+  | class
+  | module
+  | trait
+  ;
 
 constrExpr = selfInvocation
   | constrBlock;
 constrBlock = '{' selfInvocation {eol blockStat} '}';
-selfInvocation = 'this' argumentExprs {argumentExprs};
+selfInvocation = 'this' argumentsExpr {argumentsExpr};
 
-topStatSeq = topStat {eol topStat};
-topStat = {annotation [nl]} {modifier} tmplDef
+topStat =
+  | comment
+  | {annotation [nl]} {modifier} tmplDef
   | import
   | packaging
-  | packageObject;
+  | packageObject
+  | nl
+  ;
+topStatSeq = topStat {eol topStat};
 packaging = 'package' qualId [nl] '{' topStatSeq '}';
 packageObject = 'package' 'object' objectDef;
 
-compilationUnit = {'package' qualId eol} topStatSeq;
+compilationUnit = {comment nl} {'package' qualId eol} topStatSeq;

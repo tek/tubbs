@@ -1,5 +1,6 @@
 from amino.test import Spec
 from amino import List, _
+from amino.test.path import load_fixture
 
 from tubbs.grako.scala import Parser
 
@@ -76,6 +77,15 @@ implicit par3: Tpe3, par4: Tpe4) = {
 val v1 = fun2(par1);
  fun3(v1)
 }'''
+
+trait2 = '''trait Implicits {
+  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
+    inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent = true, tree.pos)
+}'''
+
+argument_assign = '''{ def foo: Tpe = foo(a = true) }'''
+
+argument_select = '''{ def foo: Tpe = foo(a.b) }'''
 
 
 class ScalaSpec(Spec):
@@ -201,5 +211,22 @@ class ScalaSpec(Spec):
     def broken2(self):
         ast = self._ast(broken_lines_2, 'def')
         ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
+
+    def trait(self):
+        ast = self._ast('trait Foo {\n}', 'trait')
+        ast.data.should.have.length_of(5)
+
+    def argument_assign(self):
+        ast = self._ast(argument_assign, 'templateBody')
+        ast[1].def_.def_.rhs[1].args.first.rhs.raw.should.contain('true')
+
+    def trait2(self):
+        ast = self._ast(trait2, 'trait')
+        print(ast)
+
+    def file(self):
+        content = load_fixture('parser', 'scala', 'file1.scala')
+        ast = self._parse(content, 'compilationUnit')
+        print(ast.value)
 
 __all__ = ('ScalaSpec',)
