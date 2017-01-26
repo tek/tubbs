@@ -54,6 +54,7 @@ class ScalaBreakRules(BreakRules):
     def token_rbrace(self, node):
         return 'rbrace', 1.0, 0.0
 
+
 class Breaker(base.Breaker):
 
     def __init__(self, textwidth) -> None:
@@ -72,7 +73,7 @@ class ScalaIndentRules(IndentRules):
     def case_clause_first(self, node):
         return 1
 
-    def block_first(self, node):
+    def block_block(self, node):
         return 1
 
     def rbrace(self, node):
