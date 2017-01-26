@@ -191,6 +191,7 @@ class Indenter(Formatter):
 
     def _handler(self, node):
         def handler(name: str, or_else: Callable=lambda: None):
+            self.log.ddebug('trying ident handler {}'.format(name))
             h = getattr(self.rules, name, None)
             return h or or_else() or self.rules.default
         rule = snake_case(node.rule)
