@@ -9,6 +9,7 @@ import amino
 from amino import L, _, List
 from amino.lazy import lazy
 from amino.func import dispatch
+from amino.list import flatten
 
 from tubbs.logging import Logging
 from tubbs.formatter.tree import flatten_list
@@ -25,6 +26,16 @@ def check_list(l, rule):
             check_list(e.v, rule)
 
 
+def process_list(data):
+    def flat(data):
+        return (
+            flatten(map(flat, data))
+            if isinstance(data, list) else
+            [data]
+        )
+    return List.wrap(flat(data))
+
+
 class PostProc:
 
     def __call__(self, ast, parser, rule):
@@ -32,14 +43,16 @@ class PostProc:
 
     @lazy
     def wrap_data(self):
-        return dispatch(self, [str, list, AstList, AstMap, AstToken, Closure],
+        return dispatch(self,
+                        [str, list, AstList, AstMap, AstToken, Closure,
+                         type(None)],
                         'wrap_')
 
     def wrap_str(self, raw, parser, rule):
         return AstToken(raw, parser._last_pos, rule, parser._take_ws())
 
     def wrap_list(self, raw, parser, rule):
-        return AstList(flatten_list(raw), rule)
+        return AstList(process_list(raw), rule)
 
     def wrap_ast_list(self, ast, parser, rule):
         return ast
@@ -52,6 +65,9 @@ class PostProc:
 
     def wrap_ast_token(self, token, parser, rule):
         return token
+
+    def wrap_none_type(self, n, parser, rule):
+        pass
 
 
 FlattenToken = namedtuple('FlattenToken', 'data')

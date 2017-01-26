@@ -78,11 +78,6 @@ val v1 = fun2(par1);
  fun3(v1)
 }'''
 
-trait2 = '''trait Implicits {
-  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
-    inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent = true, tree.pos)
-}'''
-
 argument_assign = '''{ def foo: Tpe = foo(a = true) }'''
 
 argument_select = '''{ def foo: Tpe = foo(a.b) }'''
@@ -110,14 +105,14 @@ class ScalaSpec(Spec):
     def blockExprApplyStrLit(self):
         word = List.random_alpha()
         ast = self._ast('{{foo("{}")}}'.format(word), 'simpleBlockExpr')
-        ast.block.first[2].data.raw.should.contain(word)
+        ast.block.first.args.head.args.first.data.raw.should.contain(word)
 
     def fundef(self):
         ast = self._ast(fundef, 'def')
         ast.def_.sig.id.raw.should.contain(funname)
         explicit = ast.def_.sig.paramss.explicit
         (explicit.e / _.rule).should.contain('paramClauses')
-        id = explicit.last.params.head.tpe.infixhead.compoundpre.head.id
+        id = explicit.last.params.head.tpe.infixhead.compoundpre.head.id.id
         id.raw.should.contain(tpe3)
         (id.e / _.rule).should.contain('plainid')
 
@@ -137,12 +132,14 @@ class ScalaSpec(Spec):
 
     def rettype(self):
         ast = self._ast(rettype, 'type')
-        ast.infixhead.compoundpre.head.simple.id.raw.should.contain(rettypeid)
+        (ast.infixhead.compoundpre.head.simple.id.id.raw
+         .should.contain(rettypeid))
 
     def typeargs(self):
         ast = self._ast(typeargs, 'typeArgs')
-        ast.types.head.infixhead.compoundpre.head.id.raw.should.contain('A')
-        ast.types.last.infixhead.compoundpre.head.id.raw.should.contain('Tpe6')
+        ast.types.head.infixhead.compoundpre.head.id.id.raw.should.contain('A')
+        (ast.types.last.infixhead.compoundpre.head.id.id.raw
+         .should.contain('Tpe6'))
 
     def pattern(self):
         ast = self._ast('a: Type', 'pattern')
@@ -171,12 +168,13 @@ class ScalaSpec(Spec):
         cases = ast.def_.rhs.cases
         case1 = cases.first
         case2 = cases.rest.head.case
-        case1.pat[2].infixhead.compoundpre.head.id.raw.should.contain('Type')
+        (case1.pat[2].infixhead.compoundpre.head.id.id.raw
+         .should.contain('Type'))
         case2.block.first.head.raw.should.contain('3')
 
     def result_type(self):
         ast = self._ast(resulttype, 'def')
-        (ast.def_.rhs.block.rest.head.stat.templ.head.id.raw
+        (ast.def_.rhs.block.rest.head.stat.templ.head.id.id.raw
          .should.contain('Cls'))
 
     def valVarDef(self):
@@ -206,11 +204,11 @@ class ScalaSpec(Spec):
 
     def broken(self):
         ast = self._ast(broken_lines, 'def')
-        ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
+        ast.def_.rhs.block.first.head.def_.rhs.pre.raw.should.contain('fun2')
 
     def broken2(self):
         ast = self._ast(broken_lines_2, 'def')
-        ast.def_.rhs.block.first.head.def_.rhs.head.raw.should.contain('fun2')
+        ast.def_.rhs.block.first.head.def_.rhs.pre.raw.should.contain('fun2')
 
     def trait(self):
         ast = self._ast('trait Foo {\n}', 'trait')
@@ -218,15 +216,37 @@ class ScalaSpec(Spec):
 
     def argument_assign(self):
         ast = self._ast(argument_assign, 'templateBody')
-        ast[1].def_.def_.rhs[1].args.first.rhs.raw.should.contain('true')
+        (ast[1].def_.def_.rhs.args.head.args.first.rhs.raw
+         .should.contain('true'))
 
-    def trait2(self):
-        ast = self._ast(trait2, 'trait')
-        print(ast)
+    def select(self):
+        ast = self._ast('a.b.c', 'path')
+        ast.pre.last.selector.raw.should.contain('b')
+
+    def argument_select(self):
+        ast = self._ast(argument_select, 'templateBody')
+        print(ast[1].def_.def_.rhs[1].args.first)
+
+    def import_(self):
+        ast = self._ast('one.two.three', 'importExpr')
+        ast.last.raw.should.contain('three')
+
+    def literal_attr(self):
+        ast = self._ast('"i".a', 'simpleOrCompoundExpr')
+        ast.last.raw.should.contain('a')
+
+    def literal_apply_args(self):
+        ast = self._ast('"i".a(1)', 'simpleOrCompoundExpr')
+        ast.args.head.args.first.head.raw.should.contain('1')
+
+    def literal_apply_args_as_arg(self):
+        ast = self._ast('f("i".a(1))', 'simpleApplyExpr')
+        (ast.args.head.args.first.args.head.args.first.head.raw
+         .should.contain('1'))
 
     def file(self):
         content = load_fixture('parser', 'scala', 'file1.scala')
-        ast = self._parse(content, 'compilationUnit')
-        print(ast.value)
+        ast = self._ast(content, 'compilationUnit')
+        print(ast.stats.last[8][1][2][1][1][2][3][6][1].def_.def_.rhs)
 
 __all__ = ('ScalaSpec',)

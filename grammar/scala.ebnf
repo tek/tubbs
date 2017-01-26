@@ -21,7 +21,7 @@ wildcard = '_';
 Wildcard = '_';
 arrow = '=>';
 projectOp = '#';
-Opchar = (!(WhiteSpace | Upper | Lower | Letter | Digit | paren | delim)) PrintableChar;
+Opchar = (!(WhiteSpace | Upper | Lower | Letter | Digit | paren | delim | blockCommentStart)) PrintableChar;
 PrintableChar = /[\u0020-\u007F]/;
 CharEscapeSeq = '\' ('b' | 't' | 'n' | 'f' | 'r' | '"' | "'" | '\');
 
@@ -57,15 +57,20 @@ stringLiteral =
   ;
 symbolLiteral = "'" plainidName;
 
+blockCommentStart = '/*';
 blockCommentEnd = '*/';
 blockCommentChar1 = /./ | nl;
 blockCommentChar = !blockCommentEnd blockCommentChar1;
+eolCommentStart = '//';
 eolCommentChar = !nl /./;
 blockCommentContent(token) = {blockCommentChar};
 eolCommentContent(token) = {eolCommentChar};
+blockComment = start:blockCommentStart content:blockCommentContent
+end:blockCommentEnd;
+eolComment = start:eolCommentStart content:eolCommentContent &nl;
 comment =
-  | '/*' blockCommentContent blockCommentEnd
-  | '//' eolCommentContent &nl
+  | blockComment
+  | eolComment
   ;
 
 op = !(arrow | assign) op:{Opchar}+;
@@ -98,16 +103,22 @@ ids = id {',' id};
 
 classQualifier = '[' id ']';
 superAttr = [id '.'] 'super' [classQualifier] '.' id;
-select = path '.' id;
-@name stableId =
+selectpre1 =
+  | thisRef
+  | superAttr
+  | id
+  ;
+selectpre = selector:selectpre1 dot:'.';
+select = pre:{selectpre}+ id:id;
+stableId =
   | superAttr
   | select
   | id
   ;
 thisRef = [id '.'] 'this';
 path =
-  | stableId
   | thisRef
+  | stableId
   ;
 
 functionArgTypes = infixType
@@ -147,6 +158,10 @@ ascription = ':' infixType
 patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:'{' [nl]
 cases:caseClauses [nl] rbrace:'}';
 
+
+bindings = '(' binding {',' binding} ')';
+binding = (id | wildcard) [':' type];
+
 postfixExpr = infixExpr id eol;
 infixOper =
   | infixExpr
@@ -178,24 +193,27 @@ argumentsExpr =
   | arguments
   | argumentsBlock
   ;
-simpleApplyExprPre =
+simpleApplyExprPre1 =
+  | simpleExprAttr
   | literal
   | wildcard
   | '(' [exprs] ')'
   | simpleExpr typeArgs
   | path
-  | simpleExprAttr
   ;
-simpleApplyExpr = simpleApplyExprPre {argumentsExpr}+;
-simpleExprAttr = simpleExpr '.' id;
+simpleExprAttr = simpleApplyExprPre1 '.' id;
+simpleApplyExprPre =
+  | simpleExprAttr
+  | simpleApplyExprPre1
+  ;
+simpleApplyExpr = pre:simpleApplyExprPre args:{argumentsExpr}+;
 simpleExpr1 =
-  | literal
-  | wildcard
   | '(' [exprs] ')'
   | simpleExpr typeArgs
   | simpleApplyExpr
   | path
-  | simpleExprAttr
+  | literal
+  | wildcard
   ;
 classInstantiation = new:'new' templ:(classTemplate | templateBody);
 etaExpansion = simpleExpr1 wildcard;
@@ -209,15 +227,9 @@ etaExpansion = simpleExpr1 wildcard;
   | prefixExpr
   | infixExpr
   | postfixExpr
+  | simpleApplyExpr
+  | simpleExprAttr
   | simpleExpr
-  ;
-
-bindings = '(' binding {',' binding} ')';
-binding = (id | wildcard) [':' type];
-
-@name expr =
-  | (bindings | ['implicit'] id | wildcard) arrow expr
-  | expr1
   ;
 @name expr1 =
   | 'if' '(' expr ')' {nl} expr [[eol] 'else' expr]
@@ -230,6 +242,10 @@ binding = (id | wildcard) [':' type];
   | patMat
   | simpleOrCompoundExpr
   | simpleOrCompoundExpr ascription
+  ;
+@name expr =
+  | (bindings | ['implicit'] id | wildcard) arrow expr
+  | expr1
   ;
 exprs = expr {',' expr};
 
@@ -309,6 +325,7 @@ constrAnnotation = '@' regularType argumentsExpr;
 templateStatDef = {anno:annotation [nl]} {mod:modifier} def:def;
 templateStatDcl = {anno:annotation [nl]} {mod:modifier} dcl:dcl;
 templateStat =
+  | comment
   | import
   | templateStatDef
   | templateStatDcl
@@ -319,7 +336,8 @@ selfType = id [':' type] arrow
   | 'this' ':' type arrow;
 
 import = 'import' importExpr {',' importExpr};
-importExpr = {stableId '.'}+ (id | wildcard | importSelectors);
+importExprPre = id '.';
+importExpr = {importExprPre}+ (id | wildcard | importSelectors);
 importSelectors = '{' {importSelector ','} (importSelector | wildcard) '}';
 importSelector = id [arrow id | arrow wildcard];
 
@@ -419,5 +437,7 @@ topStat =
 topStatSeq = topStat {eol topStat};
 packaging = 'package' qualId [nl] '{' topStatSeq '}';
 packageObject = 'package' 'object' objectDef;
+package = 'package' qualId;
 
-compilationUnit = {comment nl} {'package' qualId eol} topStatSeq;
+compilationUnit = initialcomment:{comment nl} package:{package eol}
+stats:topStatSeq;

@@ -77,6 +77,10 @@ class AstList(AstElem):
         return '{}({})'.format(self.__class__.__name__,
                                (self.data / repr).join_comma)
 
+    @property
+    def k(self):
+        return (self.data / _.rule).with_index
+
 
 class AstToken(AstElem):
 
@@ -232,6 +236,10 @@ class SubAstMap(SubAstValid[AstMap]):
 
     _getitem = _getattr
 
+    @property
+    def _keys(self):
+        return self._data.k
+
 
 class SubAstList(SubAstValid[AstList]):
 
@@ -255,6 +263,10 @@ class SubAstList(SubAstValid[AstList]):
     def __str__(self):
         return '{}({})'.format(self.__class__.__name__,
                                self._data.data.join_comma)
+
+    @property
+    def _keys(self):
+        return self._data.k
 
 
 class SubAstToken(SubAstValid[AstToken]):

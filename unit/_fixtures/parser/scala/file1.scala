@@ -36,33 +36,38 @@ trait Implicits {
 
   def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
     inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent = true, tree.pos)
-}
 
-object ImplicitsStats {
+  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean): SearchResult =
+    inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent, tree.pos)
 
-  import scala.reflect.internal.TypesStats._
-
-  val rawTypeImpl         = Statistics.newSubCounter ("  of which in implicits", rawTypeCount)
-  val subtypeImpl         = Statistics.newSubCounter("  of which in implicit", subtypeCount)
-  val findMemberImpl      = Statistics.newSubCounter("  of which in implicit", findMemberCount)
-  val subtypeAppInfos     = Statistics.newSubCounter("  of which in app impl", subtypeCount)
-  val implicitSearchCount = Statistics.newCounter   ("#implicit searches", "typer")
-  val plausiblyCompatibleImplicits
-                                  = Statistics.newSubCounter("  #plausibly compatible", implicitSearchCount)
-  val matchingImplicits   = Statistics.newSubCounter("  #matching", implicitSearchCount)
-  val typedImplicits      = Statistics.newSubCounter("  #typed", implicitSearchCount)
-  val foundImplicits      = Statistics.newSubCounter("  #found", implicitSearchCount)
-  val improvesCount       = Statistics.newSubCounter("implicit improves tests", implicitSearchCount)
-  val improvesCachedCount = Statistics.newSubCounter("#implicit improves cached ", implicitSearchCount)
-  val inscopeImplicitHits = Statistics.newSubCounter("#implicit inscope hits", implicitSearchCount)
-  val oftypeImplicitHits  = Statistics.newSubCounter("#implicit oftype hits ", implicitSearchCount)
-  val implicitNanos       = Statistics.newSubTimer  ("time spent in implicits", typerNanos)
-  val inscopeSucceedNanos = Statistics.newSubTimer  ("  successful in scope", typerNanos)
-  val inscopeFailNanos    = Statistics.newSubTimer  ("  failed in scope", typerNanos)
-  val oftypeSucceedNanos  = Statistics.newSubTimer  ("  successful of type", typerNanos)
-  val oftypeFailNanos     = Statistics.newSubTimer  ("  failed of type", typerNanos)
-  val subtypeETNanos      = Statistics.newSubTimer  ("  assembling parts", typerNanos)
-  val matchesPtNanos      = Statistics.newSubTimer  ("  matchesPT", typerNanos)
-  val implicitCacheAccs   = Statistics.newCounter   ("implicit cache accesses", "typer")
-  val implicitCacheHits   = Statistics.newSubCounter("implicit cache hits", implicitCacheAccs)
+  /** Search for an implicit value. See the comment on `result` at the end of class `ImplicitSearch`
+   *  for more info how the search is conducted.
+   *  @param tree                    The tree for which the implicit needs to be inserted.
+   *                                 (the inference might instantiate some of the undetermined
+   *                                 type parameters of that tree.
+   *  @param pt                      The expected type of the implicit.
+   *  @param reportAmbiguous         Should ambiguous implicit errors be reported?
+   *                                 False iff we search for a view to find out
+   *                                 whether one type is coercible to another.
+   *  @param isView                  We are looking for a view
+   *  @param context                 The current context
+   *  @param saveAmbiguousDivergent  False if any divergent/ambiguous errors should be ignored after
+   *                                 implicits search,
+   *                                 true if they should be reported (used in further typechecking).
+   *  @param pos                     Position that is should be used for tracing and error reporting
+   *                                 (useful when we infer synthetic stuff and pass EmptyTree in the `tree` argument)
+   *                                 If it's set NoPosition, then position-based services will use `tree.pos`
+   *  @return                        A search result
+   */
+  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean, pos: Position): SearchResult = {
+    // Note that the isInvalidConversionTarget seems to make a lot more sense right here, before all the
+    // work is performed, than at the point where it presently exists.
+    val shouldPrint     = printTypings && !context.undetparams.isEmpty
+    val rawTypeStart    = if (Statistics.canEnable) Statistics.startCounter(rawTypeImpl) else null
+    val findMemberStart = if (Statistics.canEnable) Statistics.startCounter(findMemberImpl) else null
+    val subtypeStart    = if (Statistics.canEnable) Statistics.startCounter(subtypeImpl) else null
+    val start           = if (Statistics.canEnable) Statistics.startTimer(implicitNanos) else null
+    if (shouldPrint)
+      typingStack.printTyping(tree, "typing implicit: %s %s".format(tree, context.undetparamsString))
+  }
 }
