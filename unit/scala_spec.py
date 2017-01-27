@@ -82,6 +82,14 @@ argument_assign = '''{ def foo: Tpe = foo(a = true) }'''
 
 argument_select = '''{ def foo: Tpe = foo(a.b) }'''
 
+class_instantiation = '''{ val a = new Cls(b).c }'''
+
+triple_bool = '''{a && b && c}'''
+
+attr_assign = 'a.b = c'
+
+attr_assign_template = '{{ {} }}'.format(attr_assign)
+
 
 class ScalaSpec(Spec):
 
@@ -244,9 +252,34 @@ class ScalaSpec(Spec):
         (ast.args.head.args.first.args.head.args.first.head.raw
          .should.contain('1'))
 
+    def class_instantiation(self):
+        ast = self._ast(class_instantiation, 'templateBody')
+        rhs = ast[1].head.def_.def_.rhs
+        rhs.pre.templ.head.head.head.id.raw.should.contain('Cls')
+        rhs.id.raw.should.contain('c')
+
+    def triple_bool(self):
+        ast = self._ast(triple_bool, 'templateBody')
+        ast[1].head.right.right.raw.should.contain('c')
+
+    def select(self):
+        ast = self._ast('{a.b.c}', 'template')
+        expr = ast.stats.stats.head_
+        expr.rule.should.equal('attrExpr')
+        expr.tail.last.id.raw.should.contain('c')
+
+    def attr_assign(self):
+        ast = self._ast(attr_assign, 'expr')
+        ast.rule.should.equal('attrAssignExpr')
+        ast.rhs.head_.raw.should.contain('c')
+
+    def attr_assign_template(self):
+        ast = self._ast(attr_assign_template, 'template')
+        ast.stats.stats.head_.rule.should.equal('attrAssignExpr')
+
     def file(self):
         content = load_fixture('parser', 'scala', 'file1.scala')
         ast = self._ast(content, 'compilationUnit')
-        print(ast.stats.last[8][1][2][1][1][2][3][6][1].def_.def_.rhs)
+        print(ast)
 
 __all__ = ('ScalaSpec',)
