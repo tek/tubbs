@@ -3,8 +3,18 @@ from typing import Callable, Union, TypeVar, Generic
 
 from grako.ast import AST
 
+from hues import huestr
+
 from amino import Map, List, Empty, _, L, Maybe, Either, Left, Right
 from amino.func import call_by_name, dispatch_with
+
+
+def indent(strings):
+    return (
+        strings.map(' {}'.format)
+        if isinstance(strings, List) else
+        [str(strings)]
+    )
 
 
 class AstElem(abc.ABC):
@@ -81,6 +91,13 @@ class AstList(AstElem):
     def k(self):
         return (self.data / _.rule).with_index
 
+    @property
+    def _keytree(self):
+        return (
+            indent(self.data // _._keytree)
+            .cons('[{}]'.format(huestr(self.rule).red.colorized))
+        )
+
 
 class AstToken(AstElem):
 
@@ -114,6 +131,11 @@ class AstToken(AstElem):
     @property
     def whitespace(self):
         return ' ' * self.ws_count
+
+    @property
+    def _keytree(self):
+        return List('{} -> {}'.format(huestr(self.rule).red.colorized,
+                                      huestr(self.raw).green.colorized))
 
 
 class AstMap(AstElem, AST, Map):
@@ -156,6 +178,21 @@ class AstMap(AstElem, AST, Map):
 
     def __repr__(self):
         return 'AstMap(\'{}\', {})'.format(self.rule, dict.__repr__(self))
+
+    @property
+    def _keytree(self):
+        def sub(key, ast):
+            ckey = huestr(key).yellow.colorized
+            return indent(indent(ast._keytree).cons(ckey))
+        return (
+            List.wrap(list(dict.items(self)))
+            .flat_map2(sub)
+            .cons('{{{}}}'.format(huestr(self.rule).red.colorized))
+        )
+
+    @property
+    def keytree(self):
+        return self._keytree.join_lines
 
 A = TypeVar('A')
 

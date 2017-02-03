@@ -15,5 +15,6 @@ setup(
         exclude=['unit', 'unit.*', 'integration', 'integration.*']),
     install_requires=[
         'ribosome',
+        'hues',
     ]
 )
