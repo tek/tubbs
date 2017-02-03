@@ -16,5 +16,8 @@ setup(
     install_requires=[
         'ribosome',
         'hues',
-    ]
+    ],
+    tests_require=[
+        'kallikrein',
+    ],
 )
