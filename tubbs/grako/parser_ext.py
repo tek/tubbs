@@ -125,6 +125,10 @@ class ParserExt(GrakoParser):
         return self._rule_stack[-1]
 
     @property
+    def _penultimate_rule(self):
+        return self._rule_stack[-2] if len(self._rule_stack) >= 2 else 'none'
+
+    @property
     def _last_pos(self):
         return self._pos_stack[-1]
 
@@ -170,7 +174,7 @@ class ParserExt(GrakoParser):
             new = (
                 cur.cat(node)
                 if isinstance(cur, AstList) else
-                self._wrap_data([cur, node], self._rule_stack[-2])
+                self._wrap_data([cur, node], self._penultimate_rule)
             )
             dict.__setitem__(self.ast, name, new)
         else:
