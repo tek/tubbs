@@ -162,9 +162,11 @@ class AstMap(AstElem, AST, Map):
         return self.parseinfo.endpos
 
     def lift(self, key):
+        msg = 'not present in AstMap({})'
         return super().lift(key).cata(
             L(SubAst.cons)(_, key, self.rule),
-            lambda: SubAstInvalid(key, self.rule, 'not present in AstMap')
+            lambda: SubAstInvalid(key, self.rule,
+                                  msg.format(self.k.join_tokens))
         )
 
     def __getattr__(self, key):
