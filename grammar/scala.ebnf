@@ -12,15 +12,15 @@ eol = nl | seminl;
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
 WhiteSpace = '\u0020' | '\u0009' | '\u000D' | '\u000A';
-Upper = /[A-Z$_]/;
+Upper = /[A-Z$]/;
 Lower = /[a-z]/;
 Letter = Upper | Lower;
 Digit = /\d/;
 paren = '(' | ')' | '[' | ']' | '{' | '}';
 delim = '`' | "'" | '"' | '.' | ';' | ',';
-assign = op:'=' [nl:nl];
+assign = op:'=' !Opchar [nl:nl];
 wildcard = '_';
-Wildcard = '_';
+Wildcard = /_/;
 arrow = '=>';
 enumeratorArrow = '<-';
 projectOp = '#';
@@ -49,7 +49,6 @@ syntaxOperator =
   | arrow
   | assign
   | enumeratorArrow
-  | prefixOperator
   ;
 
 booleanLiteral = 'true' | 'false';
@@ -110,7 +109,10 @@ comment =
 
 OpBlocker = syntaxOperator !Opchar;
 op(token) = !OpBlocker {Opchar}+;
-plainid(token) = Letter {Letter | Digit};
+IdWildcard = Wildcard !Opchar;
+IdLetter = Letter | IdWildcard;
+plainidNoToken = IdLetter {IdLetter | Digit};
+plainid(token) = IdLetter {IdLetter | Digit};
 @name plainidName = plainid;
 idOpSuffix = plainidName Wildcard {Opchar}+;
 quotedId = '`' stringLiteralData '`';
@@ -218,8 +220,10 @@ binding = (id | wildcard) [':' type];
 
 # FIXME explicitly list acceptable exprs instead of infixExpr
 # do the same with other epxrs
-postfixExpr = infixExpr id eol;
+postfixExpr = infixExpr id &eol;
 infixOper =
+  | applyExpr
+  | attrExpr
   | prefixExpr
   | infixExpr
   | simpleExpr
@@ -398,7 +402,8 @@ patterns =
   | patternVariadic
   ;
 
-guard = 'if' simpleOrCompoundExpr;
+guardExpr = simpleOrCompoundExpr;
+guard = ifkw:'if' expr:guardExpr;
 caseBlockBody = blockBody &(nl ('case' | '}'));
 caseClauseRhs =
   | block
@@ -492,7 +497,7 @@ typeDcl = id [typeParamClause] ['>:' type] ['<:' type];
 patDefPats = head:patternInfixOrSimple tail:{comma:','
 pat:patternInfixOrSimple};
 patDef = pats:(patDefPats) [colon:':' tpe:type] assign:assign rhs:expr;
-uninitializedVarDef = ids ':' type '=' wildcard;
+uninitializedVarDef = ids ':' type assign:assign wildcard;
 varDef =
   | patDef
   | uninitializedVarDef
@@ -500,10 +505,10 @@ varDef =
 
 funSig = id:id [nl1:nl] [tparams:funTypeParamClause] [nl2:nl]
 [paramss:paramClauses];
-funDefFull = sig:funSig [nl1:nl] [colon:':' [nl2:nl] type:type] [nl3:nl] assign:'=' [nl4:nl] rhs:expr;
+funDefFull = sig:funSig [nl1:nl] [colon:':' [nl2:nl] type:type] [nl3:nl] assign:assign [nl4:nl] rhs:expr;
 funDefUnit = sig:funSig [nl1:nl] lbrace:'{' [nl2:nl] rhs:blockBody [nl3:nl]
 rbrace:'}';
-funDefCtor = 'this' paramClauses ('=' constrExpr | [nl] constrBlock);
+funDefCtor = 'this' paramClauses (assign:assign constrExpr | [nl] constrBlock);
 funDef1 =
   | funDefFull
   | funDefUnit
@@ -511,7 +516,7 @@ funDef1 =
   ;
 funDef = defkw:'def' def:funDef1;
 
-typeDef = typekw:typekw nls:{nl} id:id [params:typeParamClause] assign:'=' rhs:type;
+typeDef = typekw:typekw nls:{nl} id:id [params:typeParamClause] assign:assign rhs:type;
 valVarDef = valkw:'val' def:patDef;
 varVarDef = varkw:'var' def:varDef;
 patVarDef =

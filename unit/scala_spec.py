@@ -111,60 +111,7 @@ case A(a, _) => b
 }'''
 
 
-class ScalaSpec:
-    '''scala ebnf
-    keyword $keyword
-    applyExpr $apply
-    applyChain $apply_chain
-    apply string literal $apply_string_literal
-    function definition $fundef
-    incomplete function definition $incomplete_fundef
-    function declaration $fundecl
-    function signature $funsig
-    return type $rettype
-    type arguments $typeargs
-    simple pattern $pattern
-    case clause $caseclause
-    case clause with wildcard pattern $caseclause_wildcard
-    multiple case clauses $caseclauses
-    pattern matching expression $patmat
-    pattern matching expression assigned to val $patmat_assign
-    result type $result_type
-    val definition $val_var_def
-    block statement $block_stat
-    block $block
-    block expression $block_expr
-    infix expression $infix
-    whitespace $whitespace
-    function def with broken lines at parens $broken
-    function def with broken lines at params $broken2
-    trait definition $trait
-    assignment in arguments $argument_assign
-    select $select
-    select in a function argument $argument_select
-    import statement $import_
-    attribute access on a string literal $literal_attr
-    function apply on a string literal $literal_apply_args
-    function apply on string literal as arg $literal_apply_args_as_arg
-    attribute access on a class instantiation $cls_inst_attr
-    assignment of class instantiation attribute $cls_inst_attr_assign
-    three operand logical expression $triple_bool
-    select in a template $select_template
-    attribute assignment $attr_assign
-    attribute assignment in a template $attr_assign_template
-    operator character $op_char
-    plus expression $plus
-    assignment with complex rhs $assign_ext
-    complex eta expansion expression $complex_eta
-    chained function application $chained_apply
-    private final val modifiers $modifiers
-    apply on an attribute with type arg $apply_attr_type_args
-    misc apply assignments $apply_assign
-    unapply in a case pattern $case_unapply
-    equals expression $equal
-    prefix op in an infix expression $infix_prefix
-    anonymous function without parameters $paramless_anonymous_fun
-    '''
+class ScalaSpecBase:
 
     def setup(self) -> None:
         self.parser = Parser()
@@ -187,8 +134,73 @@ class ScalaSpec:
     def stat(self, text: str, target: str) -> AstMap:
         return self.ast(text, 'templateStat', target)
 
+
+class ScalaSpec(ScalaSpecBase):
+    '''scala ebnf
+    keyword $keyword
+    plain id should not eat whitespace $plainid_ws
+    applyExpr $apply
+    applyChain $apply_chain
+    apply string literal $apply_string_literal
+    function definition $fundef
+    incomplete function definition $incomplete_fundef
+    function declaration $fundecl
+    function signature $funsig
+    return type $rettype
+    type arguments $typeargs
+    simple pattern $pattern
+    case clause $caseclause
+    case clause with wildcard pattern $caseclause_wildcard
+    case clause with guard $caseclause_guard
+    multiple case clauses $caseclauses
+    pattern matching expression $patmat
+    pattern matching expression assigned to val $patmat_assign
+    result type $result_type
+    val definition $val_var_def
+    block statement $block_stat
+    block body $block_body
+    block expression $block_expr
+    infix expression $infix
+    whitespace $whitespace
+    function def with broken lines at parens $broken
+    function def with broken lines at params $broken2
+    trait definition $trait
+    assignment in arguments $argument_assign
+    select $select
+    select in a function argument $argument_select
+    import statement $import_
+    attribute access on a string literal $literal_attr
+    function apply on a string literal $literal_apply_args
+    function apply on string literal as arg $literal_apply_args_as_arg
+    attribute access on a class instantiation $cls_inst_attr
+    assignment of class instantiation attribute $cls_inst_attr_assign
+    three operand logical expression $triple_bool
+    select in a template $select_template
+    attribute assignment $attr_assign
+    attribute assignment in a template $attr_assign_template
+    whitespace is not an operator character $ws_op_char
+    plus operator $plus
+    symbolic infix operator $pluspluseq
+    plus expression with literal operand $plus_literal
+    assignment with complex rhs $assign_ext
+    complex eta expansion expression $complex_eta
+    chained function application $chained_apply
+    private final val modifiers $modifiers
+    apply on an attribute with type arg $apply_attr_type_args
+    misc apply assignments $apply_assign
+    unapply in a case pattern $case_unapply
+    equals expression $equal
+    prefix op in an infix expression $infix_prefix
+    attribute apply in an infix expression $infix_attr_apply
+    anonymous function without parameters $paramless_anonymous_fun
+    '''
+
     def keyword(self) -> Expectation:
         return k(self.parse('case', 'plainidName')).must(be_left)
+
+    def plainid_ws(self) -> Expectation:
+        result = self.parse('case _', 'plainidName')
+        return k(result).must(be_left)
 
     def apply(self) -> Expectation:
         ast = self.expr('f(a)', 'applyExpr')
@@ -253,53 +265,58 @@ class ScalaSpec:
         ast = self.ast(caseclause_wildcard, 'caseClause')
         return k(ast.rhs.raw).must(contain('3'))
 
+    def caseclause_guard(self) -> Expectation:
+        ast = self.ast('case c if b => a', 'caseClause')
+        return k(ast.guard.expr.raw).must(contain('b'))
+
     def caseclauses(self) -> Expectation:
         ast = self.ast(caseclauses, 'caseClauses')
-        return k(ast.head_.rhs.head_.raw).must(contain('1'))
-        return k(ast.tail.head.case.rhs.raw).must(contain('3'))
+        return (
+            k(ast.head_.rhs.head_.raw).must(contain('1')) &
+            k(ast.tail.head.case.rhs.raw).must(contain('3'))
+        )
 
     def patmat(self) -> Expectation:
         ast = self.ast(patmat, 'patMat')
         return (
-            k(ast.cases.rest.head.case.pat.head.raw).must(contain('_')) &
-            k(ast.cases.rest.head.case.block.first.head.raw).must(contain('3'))
+            k(ast.cases.tail.head.case.pat.head_.raw).must(contain('_')) &
+            k(ast.cases.tail.head.case.rhs.head_.raw).must(contain('3'))
         )
 
     def patmat_assign(self) -> Expectation:
         ast = self.ast(patmat_assign, 'patVarDef')
         cases = ast.def_.rhs.cases
-        case1 = cases.first
-        case2 = cases.rest.head.case
+        case1 = cases.head_
+        case2 = cases.tail.head.case
         return (
-            k(case1.pat[2].infixhead.compoundpre.head.id.id.raw)
-            .must(contain('Type')) &
-            k(case2.block.first.head.raw).must(be_right(contain('3')))
+            k(case1.pat.head_.last.last.raw).must(contain('Type')) &
+            k(case2.rhs.head_.raw).must(be_right(contain('3')))
         )
 
     def result_type(self) -> Expectation:
         ast = self.ast(resulttype, 'def')
-        return (k(ast.def_.rhs.block.rest.head.stat.templ.head.id.id.raw)
+        return (k(ast.def_.rhs.body.tail.head.stat.templ.head.head.id.raw)
                 .must(contain('Cls')))
 
     def val_var_def(self) -> Expectation:
         ast = self.ast(val_var_def, 'valVarDef')
-        return k(ast.def_.rhs.head.raw).must(contain('1'))
+        return k(ast.def_.rhs.raw).must(contain('1'))
 
     def block_stat(self) -> Expectation:
         ast = self.ast(val_var_def, 'blockStat')
-        return k(ast.head.def_.rhs.head.raw).must(contain('1'))
+        return k(ast[1].def_.rhs.raw).must(contain('1'))
 
-    def block(self) -> Expectation:
-        ast = self.ast(block, 'block')
-        return k(ast.first.head.def_.rhs.head.raw).must(contain('1'))
+    def block_body(self) -> Expectation:
+        ast = self.ast(block, 'blockBody')
+        return k(ast.head_[1].def_.rhs.raw).must(contain('1'))
 
     def block_expr(self) -> Expectation:
-        ast = self.ast(blockExpr, 'blockExpr')
-        return k(ast.block.first.head.def_.rhs.head.raw).must(contain('1'))
+        ast = self.ast(blockExpr, 'block')
+        return k(ast.body.head_[1].def_.rhs.raw).must(contain('1'))
 
     def infix(self) -> Expectation:
         ast = self.ast('foo boo\n zoo', 'infixExpr')
-        return k(ast.arg.raw).must(contain('zoo'))
+        return k(ast.right.raw).must(contain('zoo'))
 
     def whitespace(self) -> Expectation:
         i = 3
@@ -308,22 +325,22 @@ class ScalaSpec:
 
     def broken(self) -> Expectation:
         ast = self.ast(broken_lines, 'def')
-        return (k(ast.def_.rhs.block.first.head.def_.rhs.head_.raw)
+        return (k(ast.def_.rhs.body.head_[1].def_.rhs.head_.pre.raw)
                 .must(contain('fun2')))
 
     def broken2(self) -> Expectation:
         ast = self.ast(broken_lines_2, 'def')
-        return (k(ast.def_.rhs.block.first.head.def_.rhs.head_.raw)
+        return (k(ast.def_.rhs.body.head_[1].def_.rhs.head_.pre.raw)
                 .must(contain('fun2')))
 
     def trait(self) -> Expectation:
         ast = self.ast('trait Foo {\n}', 'trait')
-        return k(ast.data).must(have_length(5))
+        return k(ast.data).must(have_length(2))
 
     def argument_assign(self) -> Expectation:
         ast = self.ast(argument_assign, 'templateBody')
-        return (k(ast[1].def_.def_.rhs.args.head.args.first.rhs.raw)
-                .must(contain('true')))
+        rhs = ast.stats.head_.body.head_[1].def_.rhs
+        return k(rhs.head_.args.head.args.head_.rhs.raw).must(contain('true'))
 
     def select(self) -> Expectation:
         ast = self.ast('a.b.c', 'path')
@@ -331,7 +348,9 @@ class ScalaSpec:
 
     def argument_select(self) -> Expectation:
         ast = self.ast(argument_select, 'templateBody')
-        return k(ast[1].def_.def_.rhs[1].args.first)
+        rhs = ast.stats.head_.body.head_[1].def_.rhs
+        return (k(rhs.head_.args.head.args.head_.tail.head.id.raw)
+                .must(contain('b')))
 
     def import_(self) -> Expectation:
         ast = self.ast('one.two.three', 'importExpr')
@@ -339,16 +358,16 @@ class ScalaSpec:
 
     def literal_attr(self) -> Expectation:
         ast = self.ast('"i".a', 'simpleOrCompoundExpr')
-        return k(ast.last.raw).must(contain('a'))
+        return k(ast.tail.last.id.raw).must(contain('a'))
 
     def literal_apply_args(self) -> Expectation:
         ast = self.ast('"i".a(1)', 'simpleOrCompoundExpr')
-        return k(ast.args.head.args.first.head.raw).must(contain('1'))
+        return k(ast.head_.args.head.args.head_.raw).must(contain('1'))
 
     def literal_apply_args_as_arg(self) -> Expectation:
-        ast = self.ast('f("i".a(1))', 'simpleApplyExpr')
-        return (k(ast.args.head.args.first.args.head.args.first.head.raw)
-                .must(contain('1')))
+        ast = self.ast('f("i".a(1))', 'applyExpr')
+        args = ast.head_.args.head.args.head_.head_.args.head.args
+        return k(args.head_.raw).must(contain('1'))
 
     def cls_inst_attr(self) -> Expectation:
         ast = self.ast(cls_inst_attr, 'expr')
@@ -356,15 +375,15 @@ class ScalaSpec:
 
     def cls_inst_attr_assign(self) -> Expectation:
         ast = self.ast(cls_inst_attr_assign, 'templateBody')
-        rhs = ast.stats.head_.block.head_[1].def_.rhs
+        rhs = ast.stats.head_.body.head_[1].def_.rhs
         return (
-            k(rhs.head_.templ.head.head.head.id.raw).must(contain('Cls')) &
+            k(rhs.head_.templ.head.head.id.raw).must(contain('Cls')) &
             k(rhs.tail.head.id.raw).must(contain('c'))
         )
 
     def triple_bool(self) -> Expectation:
         ast = self.ast(triple_bool, 'templateBody')
-        return k(ast[1].head.right.right.raw).must(contain('c'))
+        return k(ast.stats.head_.body.head_.right.right.raw).must(contain('c'))
 
     def select_template(self) -> Expectation:
         ast = self.ast('{a.b.c}', 'template')
@@ -375,26 +394,31 @@ class ScalaSpec:
         )
 
     def attr_assign(self) -> Expectation:
-        ast = self.ast(attr_assign, 'expr')
-        return (
-            k(ast.rule).must(equal('attrAssignExpr')) &
-            k(ast.rhs.head_.raw).must(contain('c'))
-        )
+        ast = self.expr(attr_assign, 'attrAssignExpr')
+        return k(ast.rhs.raw).must(contain('c'))
 
     def attr_assign_template(self) -> Expectation:
         ast = self.ast(attr_assign_template, 'template')
         return k(ast.stats.stats.head_.rule).must(equal('attrAssignExpr'))
 
-    def op_char(self) -> Expectation:
+    def ws_op_char(self) -> Expectation:
         return k(self.parse(' ', 'OpChar')).must(be_left)
 
     def plus(self) -> Expectation:
+        ast = self.ast('+', 'op')
+        return k(ast.raw).must(equal('+'))
+
+    def pluspluseq(self) -> Expectation:
         op = '++='
         ast = self.ast('a{} b'.format(op), 'infixExpr')
         return (
             k(ast.method.raw).must(contain(op)) &
-            k(ast.right.head_.raw).must(contain('b'))
+            k(ast.right.raw).must(contain('b'))
         )
+
+    def plus_literal(self) -> Expectation:
+        ast = self.ast('a + "b"', 'infixExpr')
+        return k(ast.right.rule).must(contain('singleLineStringLiteral'))
 
     def assign_ext(self) -> Expectation:
         ast = self.ast(assign_ext, 'attrAssignExpr')
@@ -410,7 +434,7 @@ class ScalaSpec:
 
     def chained_apply(self) -> Expectation:
         ast = self.ast(chained_apply, 'expr')
-        return (k(ast.tail.head.args.head.args.head_.head_.raw)
+        return (k(ast.tail.head.args.head.args.head_.raw)
                 .must(contain('f')))
 
     def modifiers(self) -> Expectation:
@@ -429,13 +453,13 @@ class ScalaSpec:
     def apply_assign(self) -> Expectation:
         def go(c: str, target: str=None) -> Expectation:
             a = self.ast(c, 'applyAssignExpr')
-            return k(a.rhs.head_.raw).must(contain('d'))
+            return k(a.rhs.raw).must(contain('d'))
         ast = self.ast('super[A].a.b(c) = d', 'applyAssignExpr')
         return (
             go('a((b, c)) = d') &
             go('a.b(c) = d') &
             go('(a.b ++ a.b)(c) = d') &
-            k(ast.rhs.head_.raw).must(contain('d')) &
+            k(ast.rhs.raw).must(contain('d')) &
             k(ast.expr.head_.rule).must(equal('superAttr'))
         )
 
@@ -455,20 +479,25 @@ class ScalaSpec:
             k(ast.right.raw).must(contain('b'))
         )
 
+    def infix_attr_apply(self) -> Expectation:
+        ast = self.ast('a.b(c) d e', 'infixExpr')
+        return k(ast.right.raw).must(contain('e'))
+
     def paramless_anonymous_fun(self) -> Expectation:
         ast = self.ast('{() => 1}', 'block')
         return k(ast.body.head_.rhs.raw).must(contain('1'))
 
 temp = '''\
-{ case c => !d && e }
+a.b(c) d e
 '''
 
 
-class ScalaFileSpec:
+class ScalaFileSpec(ScalaSpecBase):
     '''experiments
     whole file $file
     temp $temp
     temp in block $temp_block
+    temp2 $temp2
     '''
 
     __unsafe__ = None
@@ -479,11 +508,15 @@ class ScalaFileSpec:
         print(ast)
 
     def temp(self) -> Expectation:
-        ast = self.ast(temp, 'caseBlock')
+        ast = self.ast(temp, 'templateStat')
         print(ast)
 
     def temp_block(self) -> Expectation:
         ast = self.ast('{{\n{}\n}}'.format(temp), 'template')
+        print(ast)
+
+    def temp2(self) -> Expectation:
+        ast = self.ast('ptarg weak_<:< tparg', 'infixExpr')
         print(ast)
 
 __all__ = ('ScalaSpec',)
