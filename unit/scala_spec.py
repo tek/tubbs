@@ -193,6 +193,12 @@ class ScalaSpec(ScalaSpecBase):
     prefix op in an infix expression $infix_prefix
     attribute apply in an infix expression $infix_attr_apply
     anonymous function without parameters $paramless_anonymous_fun
+    parenthesized infix with nl before op and eolcomment $paren_infix
+    type attribute with type args $type_attr_args
+    infix with class instantiation as left operand $infix_inst_oper
+    def with variadic params $splat_param
+    string context $string_context
+    case clause start without newline $single_line_cases
     '''
 
     def keyword(self) -> Expectation:
@@ -487,36 +493,66 @@ class ScalaSpec(ScalaSpecBase):
         ast = self.ast('{() => 1}', 'block')
         return k(ast.body.head_.rhs.raw).must(contain('1'))
 
-temp = '''\
-a.b(c) d e
+    def paren_infix(self) -> Expectation:
+        ast = self.expr('(a\n|| b // comm\n|| c)', 'parenthesizedExprsExpr')
+        return k(ast.exprs.head_.right.right.raw).must(contain('c'))
+
+    def type_attr_args(self) -> Expectation:
+        ast = self.ast('a.B[A]', 'type')
+        return k(ast.args.types.head_.raw).must(contain('A'))
+
+    def infix_inst_oper(self) -> Expectation:
+        ast = self.ast('new A a()', 'expr')
+        return (
+            k(ast.left.rule).must(equal('classInstantiation')) &
+            k(ast.right.rule).must(equal('parenthesizedExprsExpr'))
+        )
+
+    def splat_param(self) -> Expectation:
+        ast = self.ast('def a(b: A*) = 1', 'def')
+        var = ast.def_.sig.paramss.explicit.head.params.last
+        return (
+            k(var.rule).must(equal('variadicParam')) &
+            k(var.aster.raw).must(contain('*'))
+        )
+
+    def string_context(self) -> Expectation:
+        ast = self.ast('sm"""sdf\nasdf"""', 'templateStat')
+        return k(ast).must(equal(1))
+
+    def single_line_cases(self) -> Expectation:
+        ast = self.ast('{ case a => b c d case _ => 2 }', 'blockExprContent')
+        return k(ast).must(equal(1))
+
+stat = '''\
 '''
 
 
 class ScalaFileSpec(ScalaSpecBase):
     '''experiments
     whole file $file
-    temp $temp
-    temp in block $temp_block
+    statement $statement
+    stat in block $stat_block
     temp2 $temp2
     '''
 
     __unsafe__ = None
 
     def file(self) -> Expectation:
-        content = load_fixture('parser', 'scala', 'file2.scala')
-        ast = self.ast(content, 'template')
+        content = load_fixture('parser', 'scala', 'file1.scala')
+        ast = self.ast(content, 'compilationUnit')
         print(ast)
 
-    def temp(self) -> Expectation:
-        ast = self.ast(temp, 'templateStat')
+    def statement(self) -> Expectation:
+        ast = self.ast(stat, 'templateStat')
         print(ast)
 
-    def temp_block(self) -> Expectation:
-        ast = self.ast('{{\n{}\n}}'.format(temp), 'template')
+    def stat_block(self) -> Expectation:
+        ast = self.ast('{{\n{}\n}}'.format(stat), 'template')
         print(ast)
 
     def temp2(self) -> Expectation:
-        ast = self.ast('ptarg weak_<:< tparg', 'infixExpr')
+        ast = self.ast('a.B[A]', 'type')
         print(ast)
 
 __all__ = ('ScalaSpec',)
