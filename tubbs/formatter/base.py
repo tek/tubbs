@@ -54,7 +54,7 @@ class Breaker(Formatter):
     def apply_breaks(self, tree, breaks):
         self.log.debug('applying breaks: {}'.format(breaks))
         return (tree.lines
-                .zip(bols(tree))
+                .zip(tree.bols)
                 .flat_map2(L(self.break_line)(_, breaks, _)))
 
     def break_line(self, line: List[str], breaks: List[str], line_start: int
