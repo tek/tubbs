@@ -34,25 +34,25 @@ class VimFormatter(Formatter):
 class ScalaBreakRules(BreakRules):
 
     def map_case_clause(self, node):
-        return 'start', 0.9, 0.0
+        return 'casekw', 0.9, 0.0
 
-    def token_param_clause_lpar(self, node):
+    def map_param_clause(self, node):
         return 'lpar', 0.89, 0.1
 
-    def token_implicit_param_clause_lpar(self, node):
+    def map_implicit_param_clause(self, node):
         return 'lpar', 0.9, 0.1
 
-    def list_block_first(self, node):
-        return 'first', 0.9, 0.0
+    def map_block_body(self, node):
+        return 'head', 0.9, 0.0
 
     def list_block_rest_stat(self, node):
         return 'stat', 0.9, 0.0
 
-    def token_eol(self, node):
-        return 'eol', 0.0, 1.1
+    # def token_eol(self, node):
+    #     return 'eol', 0.0, 1.1
 
-    def token_rbrace(self, node):
-        return 'rbrace', 1.0, 0.0
+#     def token_rbrace(self, node):
+#         return 'rbrace', 1.0, 0.0
 
 
 class Breaker(base.Breaker):
@@ -70,10 +70,10 @@ class VimBreaker(Breaker, VimCallback):
 
 class ScalaIndentRules(IndentRules):
 
-    def case_clause_first(self, node):
+    def case_clauses(self, node):
         return 1
 
-    def block_block(self, node):
+    def block_body_head(self, node):
         return 1
 
     def rbrace(self, node):

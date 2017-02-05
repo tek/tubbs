@@ -1,7 +1,7 @@
 import abc
-from typing import Callable, Sized
+from typing import Callable, Sized, Tuple
 
-from amino import Either, List, L, Boolean, _, __, Left, Right
+from amino import Either, List, L, Boolean, _, __, Left, Right, Maybe
 from amino.util.string import snake_case
 from amino.func import dispatch
 
@@ -9,21 +9,6 @@ from ribosome.record import Record, int_field, float_field, field
 
 from tubbs.logging import Logging
 from tubbs.formatter.tree import Tree, MapNode, ListNode, TokenNode, Node
-
-
-def eols(tree: Tree):
-    def folder(z, a):
-        cur, last = z
-        n = last + len(a) + 1
-        return cur.cat(n), n
-    def fold(head, tail):
-        return tail.fold_left((List(len(head)), len(head)))(folder)
-    return tree.lines.detach_head.map2(fold) / _[0] | List()
-
-
-def bols(tree: Tree):
-    return tree.lines.fold_left(List(0))(
-        lambda z, a: z.cat((z.last | 0) + 1 + len(a)))
 
 
 class Formatter(Logging, abc.ABC):
@@ -54,17 +39,16 @@ class BreakRules:
 
 class Breaker(Formatter):
 
-    def __init__(self, rules, textwidth) -> None:
+    def __init__(self, rules: BreakRules, textwidth: int) -> None:
         self.rules = rules
         self.textwidth = textwidth
         self.breaks = dispatch(self, List(MapNode, ListNode, TokenNode),
                                'break_')
 
-    def format(self, tree: Tree):
-        breaks = self.breaks(tree.root)
-        return Right(self.apply_breaks(tree, breaks))
+    def format(self, tree: Tree) -> Either:
+        return self.breaks(tree.root) / L(self.apply_breaks)(tree, _)
 
-    def __call__(self, tree: Tree):
+    def __call__(self, tree: Tree) -> Either:
         return self.format(tree)
 
     def apply_breaks(self, tree, breaks):
@@ -101,8 +85,8 @@ class Breaker(Formatter):
             return broken | List(cur)
         return brk(line, breaks, line_start)
 
-    def _handler(self, node, tmpl):
-        def handler(suf: str, or_else: Callable=lambda: None):
+    def _handler(self, node: Node, tmpl: str) -> Callable:
+        def handler(suf: str, or_else: Callable=lambda: None) -> Callable:
             attr = tmpl.format(suf)
             self.log.ddebug('trying break handler {}'.format(attr))
             h = getattr(self.rules, attr, None)
@@ -115,35 +99,32 @@ class Breaker(Formatter):
             L(handler)(rule, L(handler)(node.key))
         )
 
-    def handle(self, node, tmpl):
+    def handle(self, node: Node, tmpl: str) -> Either:
         result = self._handler(node, tmpl)(node)
         is_break = lambda a: isinstance(a, Sized) and len(a) == 3
-        def mkbreak(position, prio):
-            return Boolean(prio > 0).e(
-                'break prio 0',
-                Break(position=position, prio=prio)
-            )
-        def mkbreaks(name, before, after):
-            return node.sub_range(name).flat_map2(
+        def mkbreak(position: int, prio: float) -> Maybe:
+            return Boolean(prio > 0).m(Break(position=position, prio=prio))
+        def mkbreaks(name: str, before: int, after: int) -> Either[str, List]:
+            return node.sub_range(name).map2(
                 lambda start, end:
                 List((start, before), (end, after))
                 .flat_map2(mkbreak)
             )
-        def mkbreakss(a):
-            return mkbreaks(*a) if is_break(a) else List()
-        return (result // mkbreakss
+        def mkbreakss(a: Tuple) -> Either[str, List[Break]]:
+            return mkbreaks(*a) if is_break(a) else Right(List())
+        return (result.traverse(mkbreakss, Either) / _.join
                 if isinstance(result, List) else
                 mkbreakss(result))
 
-    def break_map_node(self, node):
-        sub = node.sub.flat_map(self.breaks)
-        return self.handle(node, 'map_{}') + sub
+    def break_map_node(self, node: MapNode) -> Either:
+        sub = node.sub.traverse(self.breaks, Either) / _.join
+        return (self.handle(node, 'map_{}') & sub).map2(lambda a, b: a + b)
 
-    def break_list_node(self, node):
-        sub = node.sub.flat_map(self.breaks)
-        return self.handle(node, 'list_{}') + sub
+    def break_list_node(self, node: ListNode) -> Either:
+        sub = node.sub.traverse(self.breaks, Either) / _.join
+        return (self.handle(node, 'list_{}') & sub).map2(lambda a, b: a + b)
 
-    def break_token_node(self, node):
+    def break_token_node(self, node: TokenNode) -> Either:
         return self.handle(node, 'token_{}')
 
 
@@ -173,16 +154,8 @@ class Indenter(Formatter):
         self.shiftwidth = shiftwidth
 
     def format(self, tree: Tree):
-        eol = eols(tree)
-        def first(nodes):
-            m = nodes.min_by(_.pos) / _.pos
-            return nodes.filter(lambda a: m.contains(a.pos))
-        line_nodes = (
-            tree.line_nodes(eol)
-            .map(first)
-        )
         indents = (
-            line_nodes /
+            tree.bol_nodes /
             __.map(self.indents) //
             __.max_by(lambda a: abs(a.indent)) /
             _.indent
