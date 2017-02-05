@@ -34,7 +34,10 @@ class VimFormatter(Formatter):
 class ScalaBreakRules(BreakRules):
 
     def map_case_clause(self, node):
-        return 'casekw', 0.9, 0.0
+        ''' TODO check parent; if more than one case is present, return
+        1.0, else 0.9
+        '''
+        return 'casekw', 1.0, 0.0
 
     def map_param_clause(self, node):
         return 'lpar', 0.89, 0.1
@@ -48,11 +51,14 @@ class ScalaBreakRules(BreakRules):
     def list_block_rest_stat(self, node):
         return 'stat', 0.9, 0.0
 
-    # def token_eol(self, node):
-    #     return 'eol', 0.0, 1.1
+    def token_eol(self, node):
+        return 'eol', 0.0, 1.1
 
-#     def token_rbrace(self, node):
-#         return 'rbrace', 1.0, 0.0
+    def token_lbrace(self, node):
+        return 'lbrace', 0.0, 1.0
+
+    def token_rbrace(self, node):
+        return 'rbrace', 1.0, 0.0
 
 
 class Breaker(base.Breaker):
