@@ -104,9 +104,6 @@ class CoreTransitions(TubbsTransitions):
     def lang_hints(self, name):
         return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
 
-    # TODO determine rule
-    # parse whole file, select smallest rule containing the range, use indent
-    # of parent
     def _format(self, parser, formatters, rng):
         start, end = rng
         content = self.vim.buffer.content[start - 1:end]

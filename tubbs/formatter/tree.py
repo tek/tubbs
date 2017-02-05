@@ -291,8 +291,8 @@ class Tree(Logging):
         return 'Tree({})'.format(self.root)
 
     @property
-    def lines(self):
-        return self.root.lines
+    def lines(self) -> List[str]:
+        return self.root.lines.map(__.rstrip())
 
     @property
     def flatten(self):

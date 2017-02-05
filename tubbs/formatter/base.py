@@ -51,11 +51,14 @@ class Breaker(Formatter):
     def __call__(self, tree: Tree) -> Either:
         return self.format(tree)
 
-    def apply_breaks(self, tree, breaks):
+    def apply_breaks(self, tree: Tree, breaks: List[Break]) -> List[str]:
         self.log.debug('applying breaks: {}'.format(breaks))
-        return (tree.lines
-                .zip(tree.bols)
-                .flat_map2(L(self.break_line)(_, breaks, _)))
+        return (
+            tree.lines
+            .zip(tree.bols)
+            .flat_map2(L(self.break_line)(_, breaks, _))
+            .map(__.rstrip())
+        )
 
     def break_line(self, line: List[str], breaks: List[str], line_start: int
                    ) -> List[str]:

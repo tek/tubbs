@@ -16,21 +16,19 @@ from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.grako.ast import AstMap
 
 fun = '''def fun[A, B, C](p1: Type1, p2: Type2)\
-(implicit p3: A :: B, p4: Type4) = {
-    val a = p1 match {case x: Type2 => 5
-        case _ => 3
-    }
-}'''
+(implicit p3: A :: B, p4: Type4) = {\
+val a = p1 match {
+case x: Type2 => 5 case _ => 3 } }'''
 
 
 broken_fun = '''\
 def fun[A, B, C]
 (p1: Type1, p2: Type2)
 (implicit p3: A :: B, p4: Type4) = {
-    val a = p1 match {
+val a = p1 match {
 case x: Type2 => 5
-        case _ => 3
-    }
+case _ => 3
+}
 }'''
 
 
@@ -92,11 +90,11 @@ class FormatTreeSpec:
 
     def bols(self) -> Expectation:
         bols = self._broken_fun_tree.bols
-        return k(bols) == List(0, 17, 40, 77, 100, 119, 139, 145, 147)
+        return k(bols) == List(0, 17, 40, 77, 96, 115, 127, 129, 131)
 
     def eols(self) -> Expectation:
         eols = self._broken_fun_tree.eols
-        return k(eols) == List(16, 39, 76, 99, 118, 138, 144, 146)
+        return k(eols) == List(16, 39, 76, 95, 114, 126, 128, 130)
 
     def bols_eols(self) -> Expectation:
         lines = Lists.lines(broken_fun)
