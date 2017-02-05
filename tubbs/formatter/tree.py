@@ -1,7 +1,9 @@
 import abc
 from typing import Tuple, Callable
 
-from amino import List, L, _, __, Boolean, Either, Right
+from toolz import valfilter
+
+from amino import List, L, _, __, Boolean, Either, Right, Map, Maybe
 from amino.lazy import lazy
 from amino.list import flatten
 from amino.func import is_not_none
@@ -11,7 +13,7 @@ from tubbs.grako.ast import AstList, AstElem, AstToken, AstMap
 
 
 def indent(strings):
-    return strings.map('-' + _)
+    return strings.map(' ' + _)
 
 
 def flatten_list(data):
@@ -157,8 +159,7 @@ class MapNode(Inode):
     @lazy
     def sub(self):
         return (
-            self.data
-            .valfilter(is_not_none)
+            Map(valfilter(is_not_none, self.data))
             .to_list
             .map2(L(node)(_, _, self))
             .sort_by(_.pos)

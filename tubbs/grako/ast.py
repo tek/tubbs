@@ -1,11 +1,11 @@
 import abc
-from typing import Callable, Union, TypeVar, Generic
+from typing import Callable, Union, TypeVar, Generic, Dict
 
 from grako.ast import AST
 
 from hues import huestr
 
-from amino import Map, List, Empty, _, L, Maybe, Either, Left, Right
+from amino import List, Empty, _, L, Maybe, Either, Left, Right
 from amino.func import call_by_name, dispatch_with
 
 
@@ -138,7 +138,7 @@ class AstToken(AstElem):
                                       huestr(self.raw).green.colorized))
 
 
-class AstMap(AstElem, AST, Map):
+class AstMap(AstElem, AST):
 
     @staticmethod
     def from_ast(ast: AST):
@@ -163,14 +163,14 @@ class AstMap(AstElem, AST, Map):
 
     def lift(self, key):
         msg = 'not present in AstMap({})'
-        return super().lift(key).cata(
+        return Maybe(Dict.get(self, key)).cata(
             L(SubAst.cons)(_, key, self.rule),
             lambda: SubAstInvalid(key, self.rule,
-                                  msg.format(self.k.join_tokens))
+                                  msg.format(' '.join(self.keys())))
         )
 
     def __getattr__(self, key):
-        return self.lift(key)  # / to_list
+        return self.lift(key)
 
     def get(self, key, default=None):
         return dict.get(self, key, default)
