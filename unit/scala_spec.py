@@ -525,6 +525,12 @@ class ScalaSpec(ScalaSpecBase):
         return k(ast).must(equal(1))
 
 stat = '''\
+def fun[A, B, C](p1: Type1, p2: Type2)\
+(implicit p3: A :: B, p4: Type4) = {
+    val a = p1 match {case x: Type2 => 5
+        case _ => 3
+    }
+}
 '''
 
 
@@ -552,7 +558,7 @@ class ScalaFileSpec(ScalaSpecBase):
         print(ast)
 
     def temp2(self) -> Expectation:
-        ast = self.ast('a.B[A]', 'type')
+        ast = self.ast('A :: B', 'infixType')
         print(ast)
 
 __all__ = ('ScalaSpec',)

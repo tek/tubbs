@@ -173,7 +173,8 @@ simpleType =
   | dependentType
   | parenthesizedTypes
   | select
-  | stableId;
+  | stableId
+  ;
 typeArgs = lbrack:lbrack types:types rbrack:rbrack;
 refinementTemplate = [nl] '{' refineStat {eol refineStat} '}';
 refineStat = dcl
@@ -181,7 +182,8 @@ refineStat = dcl
 appliedType = simple:simpleType args:typeArgs;
 regularType =
   | appliedType
-  | simpleType;
+  | simpleType
+  ;
 annotType = tpe:regularType anno:{annotation}+;
 annotOrRegularType =
   | annotType
@@ -189,7 +191,7 @@ annotOrRegularType =
   ;
 refinementSubtype = withkw:'with' type:annotOrRegularType;
 refinementsOnlySubtype = {refinementSubtype}+;
-refinementsWithTemplate = subtype:{refinementSubtype} templ:refinementTemplate;
+refinementsWithTemplate = {subtype:refinementSubtype} templ:refinementTemplate;
 refinements =
   | refinementsOnlySubtype
   | refinementsWithTemplate
@@ -197,7 +199,9 @@ refinements =
 refinedType = compoundpre:annotOrRegularType refine:refinements;
 compoundType =
   | refinedType
-  | refinementTemplate;
+  | refinementTemplate
+  | simpleType
+  ;
 infixTypeRest = infix:id [nl:nl] rhs:compoundType;
 infixType = infixhead:compoundType infixtail:{infixTypeRest}+;
 functionType = args:functionArgTypes arrow:arrow tpe:type;
