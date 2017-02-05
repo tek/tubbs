@@ -298,9 +298,10 @@ class Tree(Logging):
     def flatten(self):
         return List.wrap(self.root.flatten)
 
-    def line_nodes(self, eols):
-        def index(node):
-            return (eols.find(_ > node.pos) | 0) - 1
+    @lazy
+    def line_nodes(self) -> List[List[Node]]:
+        def index(node: Node) -> int:
+            return (self.eols.find(_ > node.pos) | 0) - 1
         return (
             self.flatten
             .group_by(index)
@@ -309,5 +310,29 @@ class Tree(Logging):
             .sort_by(_[0]) /
             _[1]
         )
+
+    @lazy
+    def eols(self) -> List[int]:
+        def folder(z: Tuple[List[int], int], a: str) -> Tuple[List[int], int]:
+            cur, last = z
+            n = last + len(a) + 1
+            return cur.cat(n), n
+        def fold(head: str, tail: List[str]) -> Maybe[List[int]]:
+            return tail.fold_left((List(len(head)), len(head)))(folder)
+        return self.lines.detach_head.map2(fold) / _[0] | List()
+
+    @lazy
+    def bols(self) -> List[int]:
+        ''' add 1 for the newline byte
+        '''
+        return self.lines.fold_left(List(0))(
+            lambda z, a: z.cat((z.last | 0) + 1 + len(a)))
+
+    @property
+    def bol_nodes(self) -> List[List[Node]]:
+        def first(nodes: List[Node]) -> List[Node]:
+            m = nodes.min_by(_.pos) / _.pos
+            return nodes.filter(lambda a: m.contains(a.pos))
+        return self.line_nodes / first
 
 __all__ = ('Tree',)
