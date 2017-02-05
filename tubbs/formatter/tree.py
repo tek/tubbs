@@ -301,7 +301,7 @@ class Tree(Logging):
     @lazy
     def line_nodes(self) -> List[List[Node]]:
         def index(node: Node) -> int:
-            return (self.eols.find(_ > node.pos) | 0) - 1
+            return (self.eols.find(_ >= node.pos) | 0) - 1
         return (
             self.flatten
             .group_by(index)

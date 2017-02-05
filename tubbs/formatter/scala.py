@@ -73,7 +73,7 @@ class ScalaIndentRules(IndentRules):
     def case_clauses(self, node):
         return 1
 
-    def block_body_head(self, node):
+    def block_body(self, node):
         return 1
 
     def rbrace(self, node):

@@ -7,7 +7,7 @@ from kallikrein import k, unsafe_k
 from kallikrein.expectation import Expectation, AlgExpectation
 from kallikrein.matchers.either import be_right
 from kallikrein.matchers.length import have_length
-from amino import _, List
+from amino import _, List, __
 from amino.list import Lists
 
 from tubbs.grako.scala import Parser
@@ -110,13 +110,19 @@ class FormatTreeSpec:
 
     def line_nodes(self) -> Expectation:
         nodes = self._broken_fun_tree.line_nodes
-        print(nodes[1])
         return k(nodes).must(have_length(Lists.lines(broken_fun).length))
 
     def bol_nodes(self) -> Expectation:
         nodes = self._broken_fun_tree.bol_nodes
-        print(nodes[2])
-        return k(1).must(equal(1))
+        return (
+            k(nodes.head // __.lift(1) / _.key).must(contain('defkw')) &
+            k(nodes.lift(1) // _.head / _.key).must(contain('paramss')) &
+            k(nodes.lift(2) // _.head / _.key).must(contain('lpar')) &
+            k(nodes.lift(3) // _.head / _.key).must(contain('body')) &
+            k(nodes.lift(4) // _.head / _.key).must(contain('cases')) &
+            k(nodes.lift(5) // _.head / _.key).must(contain('case')) &
+            k(nodes.lift(6) // _.head / _.key).must(contain('brace'))
+        )
 
     def break_fun(self) -> Expectation:
         breaker = Breaker(37)
