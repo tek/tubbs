@@ -4,7 +4,7 @@ from ribosome.machine import may_handle, handle, Message
 from ribosome.machine.base import io, UnitTask
 from ribosome.machine.transition import Fatal
 
-from amino import __, L, _, Task, Either, Maybe, Right, List
+from amino import __, L, _, Task, Either, Maybe, Right, List, Map
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
@@ -86,7 +86,7 @@ class CoreTransitions(TubbsTransitions):
 
     def with_match(self, parser: str, ident: str,
                    f: Callable[[ParserBase], Maybe]):
-        return self.crawler(parser).find_and_parse(ident) // f
+        return self.crawler(parser) // __.find_and_parse(ident) // f
 
     def visual(self, tpe, match) -> Either:
         self.log.debug('attempting to select {}'.format(match))
@@ -99,15 +99,15 @@ class CoreTransitions(TubbsTransitions):
     def crawler(self, parser):
         hints = (self._callback('hints')
                  .o(lambda: self.lang_hints(parser.name))) / __()
-        return Crawler(self.vim, parser, hints)
+        content = self.vim.buffer.content
+        return self.vim.window.line0 / (L(Crawler)(content, _, parser, hints))
 
     def lang_hints(self, name):
         return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
 
     def _format(self, parser, formatters, rng):
-        start, end = rng
-        content = self.vim.buffer.content[start - 1:end]
-        return FormattingFacade(parser, formatters).format(content)
+        content = self.vim.buffer.content
+        return FormattingFacade(parser, formatters).format(content, rng)
 
     def update_range(self, lines, rng):
         return io(__.buffer.set_content(lines, rng=slice(*rng)))

@@ -1,0 +1,1 @@
+../../../../integration/_fixtures/scala/format/file2.scala

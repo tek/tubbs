@@ -51,8 +51,8 @@ class ScalaBreakRules(BreakRules):
     def list_block_rest_stat(self, node):
         return 'stat', 0.9, 0.0
 
-    def token_eol(self, node):
-        return 'eol', 0.0, 1.1
+    def token_seminl_semi(self, node):
+        return 'semi', 0.0, 1.1
 
     def token_lbrace(self, node):
         return 'lbrace', 0.0, 1.0

@@ -1,14 +1,28 @@
 import abc
 from typing import Callable, Sized, Tuple
 
+from hues import huestr
+
 from amino import Either, List, L, Boolean, _, __, Left, Right, Maybe
 from amino.util.string import snake_case
 from amino.func import dispatch
+from amino.regex import Regex
 
 from ribosome.record import Record, int_field, float_field, field
 
 from tubbs.logging import Logging
 from tubbs.formatter.tree import Tree, MapNode, ListNode, TokenNode, Node
+
+
+def hl(data: str) -> str:
+    return huestr(data).bg_yellow.black.colorized
+
+
+ws_re = Regex(r'^\s*$')
+
+
+def only_ws(data: str) -> Boolean:
+    return ws_re.match(data).present
 
 
 class Formatter(Logging, abc.ABC):
@@ -60,33 +74,38 @@ class Breaker(Formatter):
             .map(__.rstrip())
         )
 
-    def break_line(self, line: List[str], breaks: List[str], line_start: int
-                   ) -> List[str]:
-        def brk(cur, brks, start):
-            end = start + len(cur)
-            qualified = brks.filter(lambda a: start < a.position < end)
-            def rec1(pos):
-                local_pos = pos - start
-                self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
-                left = cur[:local_pos]
-                right = cur[local_pos:]
-                self.log.ddebug(
-                    'broke line into\n{}\n{}'.format(left, right))
-                return brk(left, qualified, start) + brk(right, qualified, pos)
-            def rec0(brk):
-                msg = 'line did not exceed tw: {}'
-                return (
-                    Boolean(len(cur) > self.textwidth or brk.prio >= 1.0)
-                    .e(msg.format(cur), brk.position) /
-                    rec1
-                )
-            broken = (
-                qualified.max_by(_.prio)
-                .to_either('no breaks for {}'.format(cur)) //
-                rec0
-            ).leffect(self.log.ddebug)
-            return broken | List(cur)
-        return brk(line, breaks, line_start)
+    def break_line(self, cur: str, brks: List[Break], start: int) -> List[str]:
+        end = start + len(cur)
+        qualified = brks.filter(lambda a: start < a.position < end)
+        def rec2(data: str, pos: int) -> List[str]:
+            return (
+                List()
+                if only_ws(data) else
+                self.break_line(data, qualified, pos)
+            )
+        def rec1(pos: int) -> List[str]:
+            local_pos = pos - start
+            self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
+            left = cur[:local_pos]
+            right = cur[local_pos:]
+            self.log.ddebug(
+                lambda:
+                'broke line into\n{}\n{}'.format(hl(left), hl(right))
+            )
+            return rec2(left, start) + rec2(right, pos)
+        def rec0(brk: Break) -> Either[str, List[str]]:
+            msg = 'line did not exceed tw: {}'
+            return (
+                Boolean(len(cur) > self.textwidth or brk.prio >= 1.0)
+                .e(msg.format(cur), brk.position) /
+                rec1
+            )
+        broken = (
+            qualified.max_by(_.prio)
+            .to_either('no breaks for {}'.format(cur)) //
+            rec0
+        ).leffect(self.log.ddebug)
+        return broken | List(cur)
 
     def _handler(self, node: Node, tmpl: str) -> Callable:
         def handler(suf: str, or_else: Callable=lambda: None) -> Callable:

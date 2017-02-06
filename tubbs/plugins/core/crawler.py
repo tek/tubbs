@@ -1,4 +1,3 @@
-from ribosome.nvim import NvimFacade
 from ribosome.record import Record, field, str_field
 
 from tubbs.grako.base import ParserBase
@@ -49,40 +48,58 @@ class Match(Record):
 
     @property
     def range(self) -> Either:
-        return (self.start & self.end).to_either(f'{self} has no range')
+        return (
+            (self.start & (self.end / (_ + 1)))
+            .to_either('{} has no range'.format(self))
+        )
 
     @property
     def range1(self) -> Either:
-        return (self.start1 & self.end1).to_either(f'{self} has no range1')
+        return (
+            (self.start1 & self.end1)
+            .to_either('{} has no range1'.format(self))
+        )
+
+    @property
+    def range_inclusive(self) -> Either:
+        return (
+            (self.start & self.end)
+            .to_either('{} has no range'.format(self))
+        )
+
 
 
 class Crawler(Logging):
 
-    def __init__(self, vim: NvimFacade, parser: ParserBase,
+    def __init__(self, content: List[str], line: int, parser: ParserBase,
                  hints: Maybe[HintsBase]) -> None:
-        self.vim = vim
+        self.content = content
+        self.line = line
         self.parser = parser
         self.hints = hints
 
-    def find_and_parse(self, ident, linewise=True) -> Either:
+    def find_and_parse(self, ident: str, linewise: bool=True) -> Either:
         return self.find(ident, linewise) // L(self._parse)(ident, _)
 
-    def find(self, ident, linewise=True) -> Either:
-        self.log.debug(f'crawling for {ident}')
+    def find(self, ident: str, linewise: bool=True) -> Either:
+        self.log.debug('crawling for {}'.format(ident))
         return (
-            (self.hints // __.find(self.vim, ident))
-            .to_either(f'no hint matched for {ident}')
+            (self.hints // __.find(self.content, self.line, ident))
+            .to_either('no hint matched for {}'.format(ident))
             .o(L(self._default_start)(ident))
         )
 
-    def _default_start(self, ident) -> Either:
-        return (self.vim.window.line.to_either('no current line') /
-                L(HintMatch.from_attr)('line')(_, rules=List(ident)))
+    @property
+    def parsable_range(self) -> Either:
+        return (self.hints / _.hints.k | List()).find_map(self.find_and_parse)
 
-    def _parse(self, ident, match) -> Either:
-        self.log.debug(f'parsing {match} for {ident}')
-        text = self.vim.buffer.content[match.line:].join_lines
-        def match_rule(rule):
+    def _default_start(self, ident: str) -> Either:
+        return self.line / L(HintMatch.from_attr)('line')(_, rules=List(ident))
+
+    def _parse(self, ident: str, match: Match) -> Either:
+        self.log.debug('parsing {} for {}'.format(match, ident))
+        text = self.content[match.line:].join_lines
+        def match_rule(rule: str) -> Either:
             return (
                 self.parser.parse(text, rule) /
                 L(Match.from_attr('ast'))(_, rule=rule, ident=ident,
@@ -91,7 +108,7 @@ class Crawler(Logging):
         return (
             match.rules
             .find_map(match_rule)
-            .to_either(f'no rule matched for `{ident}` at {match}')
+            .to_either('no rule matched for `{}` at {}'.format(ident, match))
         )
 
 __all__ = ('Crawler',)
