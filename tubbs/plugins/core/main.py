@@ -1,94 +1,108 @@
-from typing import Callable
+from typing import Callable, Tuple
 
 from ribosome.machine import may_handle, handle, Message
 from ribosome.machine.base import io, UnitTask
 from ribosome.machine.transition import Fatal
+from ribosome.request.base import parse_int
 
 from amino import __, L, _, Task, Either, Maybe, Right, List, Map
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
 from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
-                                        FormatRange)
-from tubbs.plugins.core.crawler import Crawler
+                                        FormatRange, FormatAt)
+from tubbs.plugins.core.crawler import Crawler, Match
 from tubbs.grako.base import ParserBase
-from tubbs.formatter.facade import FormattingFacade
+from tubbs.formatter.facade import FormattingFacade, Formatted, Range
+from tubbs.formatter.base import Formatter
+from tubbs.hints.base import HintsBase
 
 
 class CoreTransitions(TubbsTransitions):
 
     @may_handle(StageI)
-    def stage_i(self):
+    def stage_i(self) -> Message:
         return io(__.vars.set_p('started', True))
 
     @handle(AObj)
-    def a_obj(self):
-        return self.load_and_run(L(Select)(_, 'a', self.msg.ident) >> Right)
+    def a_obj(self) -> Maybe[Message]:
+        return (
+            self.load_and_run(L(Select)(_, 'a', self.msg.ident) >> Right)
+            .lmap(Fatal)
+        )
 
     @handle(Select)
-    def select(self):
+    def select(self) -> Maybe[Message]:
         self.log.debug('selecting {} {}'.format(self.msg.tpe, self.msg.ident))
-        return self.with_match_msg(L(self.visual)(self.msg.tpe, _)).lmap(Fatal)
+        return self.with_match_msg(self.visual).lmap(Fatal)
 
     @handle(FormatRange)
-    def format_range(self):
-        start = self.msg.options.get('start').o(lambda: self.vim.window.line)
-        end = self.msg.options.get('end').o(start)
+    def format_range(self) -> Maybe[Message]:
+        start = (
+            self.msg.options.get('start')
+            .o(lambda: self.vim.window.line) //
+            parse_int
+        )
+        end = self.msg.options.get('end').o(start) // parse_int
         load = lambda s, e: self.load_and_run(L(Format)(_, (s, e)) >> Right)
         return (
             (start & end)
-            .to_either(Fatal('invalid range for formatting'))
+            .to_either('invalid range for formatting')
             .flat_map2(load)
             .lmap(Fatal)
         )
 
+    @may_handle(FormatAt)
+    def format_at(self) -> Message:
+        return FormatRange(options=(Map(start=self.msg.line)))
+
     @handle(Format)
-    def format(self):
+    def format(self) -> Maybe[Message]:
         start, end = self.msg.range
-        vim_range = start - 1, end
         return (
             (self.data.parser(self.msg.parser) &
              self.formatters(self.msg.parser))
-            .map2(L(self._format)(_, _, self.msg.range)) /
-            L(self.update_range)(_, vim_range)
+            .flat_map2(L(self._format)(_, _, self.msg.range))
+            .map(L(self.update_range)(_, self.msg.range))
         ).lmap(Fatal)
 
     @property
-    def parser_name(self):
+    def parser_name(self) -> Either[str, str]:
         return (
             self.vim.vars.p('parser')
             .o(lambda: self.vim.buffer.options('filetype'))
         )
 
-    def load_and_run(self, f: Callable[[str], Either[str, Message]]):
+    def load_and_run(self, f: Callable[[str], Either[str, Message]]
+                     ) -> Either[str, Tuple[ParserBase, Message]]:
         load = lambda name: (self.data.load_parser(name) & f(name))
-        return (self.parser_name // load).lmap(Fatal)
+        return self.parser_name // load
 
-    def formatters(self, name):
+    def formatters(self, name: str) -> Either[str, List[Formatter]]:
         custom = self._callbacks('formatters_{}'.format(name))
         return self.lang_formatters(name) if custom.empty else Right(custom)
 
-    def lang_formatters(self, name):
+    def lang_formatters(self, name: str) -> Either[str, List[Formatter]]:
         return (
             List('VimFormatter', 'VimBreaker', 'VimIndenter')
             .map(L(self.lang_formatter)(name, _))
             .sequence(Either)
         )
 
-    def lang_formatter(self, lang, name):
+    def lang_formatter(self, lang: str, name: str) -> Either[str, Formatter]:
         mod = 'tubbs.formatter'
         return (Either.import_name('{}.{}'.format(mod, lang), name) /
                 __(self.vim))
 
-    def with_match_msg(self, f: Callable[[ParserBase], Either]):
+    def with_match_msg(self, f: Callable[[ParserBase], Either]) -> Either:
         return (self.data.parser(self.msg.parser) //
                 L(self.with_match)(_, self.msg.ident, f))
 
     def with_match(self, parser: str, ident: str,
-                   f: Callable[[ParserBase], Maybe]):
+                   f: Callable[[ParserBase], Either]) -> Either:
         return self.crawler(parser) // __.find_and_parse(ident) // f
 
-    def visual(self, tpe, match) -> Either:
+    def visual(self, match: Match) -> Either:
         self.log.debug('attempting to select {}'.format(match))
         return (
             match.range1
@@ -96,21 +110,33 @@ class CoreTransitions(TubbsTransitions):
             UnitTask
         )
 
-    def crawler(self, parser):
-        hints = (self._callback('hints')
-                 .o(lambda: self.lang_hints(parser.name))) / __()
+    def hints(self, name: str) -> Either[str, HintsBase]:
+        return (
+            self._callback('hints')
+            .o(lambda: self.lang_hints(name)) /
+            __()
+        )
+
+    def lang_hints(self, name: str) -> Either[str, HintsBase]:
+        return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
+
+    def crawler(self, parser: ParserBase) -> Either[str, Crawler]:
+        hints = self.hints(parser.name)
         content = self.vim.buffer.content
         return self.vim.window.line0 / (L(Crawler)(content, _, parser, hints))
 
-    def lang_hints(self, name):
-        return Either.import_name('tubbs.hints.{}'.format(name), 'Hints')
-
-    def _format(self, parser, formatters, rng):
+    def _format(self, parser: ParserBase, formatters: List[Formatter],
+                rng: Range) -> Either[str, Formatted]:
         content = self.vim.buffer.content
-        return FormattingFacade(parser, formatters).format(content, rng)
+        return self.formatting_facade(parser, formatters).format(content, rng)
 
-    def update_range(self, lines, rng):
-        return io(__.buffer.set_content(lines, rng=slice(*rng)))
+    def formatting_facade(self, parser: ParserBase, formatters: List[Formatter]
+                          ) -> FormattingFacade:
+        return FormattingFacade(parser, formatters, self.hints(parser.name))
+
+    def update_range(self, formatted: Formatted, rng: Range) -> Message:
+        return io(__.buffer.set_content(formatted.lines,
+                                        rng=slice(*formatted.rng)))
 
 
 class Plugin(TubbsComponent):

@@ -9,6 +9,7 @@ from kallikrein.matchers.length import have_length
 
 from tubbs.grako.scala import Parser
 from tubbs.grako.ast import AstMap
+from tubbs.logging import Logging
 
 funname = List.random_alpha(5)
 
@@ -111,7 +112,7 @@ case A(a, _) => b
 }'''
 
 
-class ScalaSpecBase:
+class ScalaSpecBase(Logging):
 
     def setup(self) -> None:
         self.parser = Parser()
@@ -547,18 +548,18 @@ class ScalaFileSpec(ScalaSpecBase):
     def file(self) -> Expectation:
         content = load_fixture('parser', 'scala', 'file1.scala')
         ast = self.ast(content, 'compilationUnit')
-        print(ast)
+        self.log.info(ast)
 
     def statement(self) -> Expectation:
         ast = self.ast(stat, 'templateStat')
-        print(ast)
+        self.log.info(ast)
 
     def stat_block(self) -> Expectation:
         ast = self.ast('{{\n{}\n}}'.format(stat), 'template')
-        print(ast)
+        self.log.info(ast)
 
     def temp2(self) -> Expectation:
         ast = self.ast('A :: B', 'infixType')
-        print(ast)
+        self.log.info(ast)
 
 __all__ = ('ScalaSpec',)

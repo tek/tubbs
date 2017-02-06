@@ -6,7 +6,7 @@ from tubbs.main import Tubbs
 from amino import List
 from tubbs.logging import Logging
 from tubbs.plugins.core.message import (AObj, StageI, AObjRule, IObj, IObjRule,
-                                        Format, FormatRange)
+                                        Format, FormatRange, FormatAt)
 
 
 class TubbsNvimPlugin(NvimStatePlugin, Logging):
@@ -69,6 +69,10 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
 
     @json_msg_command(FormatRange)
     def tub_format_range(self):
+        pass
+
+    @json_msg_command(FormatAt)
+    def tub_format_at(self):
         pass
 
 __all__ = ('TubbsNvimPlugin',)
