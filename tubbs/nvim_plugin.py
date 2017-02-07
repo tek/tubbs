@@ -63,7 +63,7 @@ class TubbsNvimPlugin(NvimStatePlugin, Logging):
     def tub_i_rule(self):
         pass
 
-    @msg_command(Format)
+    @msg_function(FormatAt, sync=True)
     def tub_format(self):
         pass
 

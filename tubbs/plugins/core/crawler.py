@@ -68,7 +68,6 @@ class Match(Record):
         )
 
 
-
 class Crawler(Logging):
 
     def __init__(self, content: List[str], line: int, parser: ParserBase,

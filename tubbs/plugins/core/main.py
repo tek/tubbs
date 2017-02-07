@@ -18,6 +18,9 @@ from tubbs.formatter.base import Formatter
 from tubbs.hints.base import HintsBase
 
 
+formatter_mod = 'tubbs.formatter'
+
+
 class CoreTransitions(TubbsTransitions):
 
     @may_handle(StageI)
@@ -82,17 +85,39 @@ class CoreTransitions(TubbsTransitions):
         custom = self._callbacks('formatters_{}'.format(name))
         return self.lang_formatters(name) if custom.empty else Right(custom)
 
-    def lang_formatters(self, name: str) -> Either[str, List[Formatter]]:
+    def lang_formatters(self, lang: str) -> Either[str, List[Formatter]]:
         return (
-            List('VimFormatter', 'VimBreaker', 'VimIndenter')
-            .map(L(self.lang_formatter)(name, _))
+            List(('Breaker', 'breaks'), ('Indenter', 'indents'))
+            .map2(L(self.lang_formatter)(lang, _, _))
             .sequence(Either)
         )
 
-    def lang_formatter(self, lang: str, name: str) -> Either[str, Formatter]:
-        mod = 'tubbs.formatter'
-        return (Either.import_name('{}.{}'.format(mod, lang), name) /
-                __(self.vim))
+    def lang_formatter(self, lang: str, name: str, tpe: str
+                       ) -> Either[str, Formatter]:
+        return (
+            (self.vim.vars.pd('{}_{}'.format(lang, tpe)) //
+             L(self.dict_formatter)(lang, name, _))
+            .o(lambda: self.builtin_formatter(lang, name))
+        )
+
+    def dict_formatter(self, lang: str, name: str, rules: dict
+                       ) -> Either[str, Formatter]:
+        def cons(tpe: type) -> Formatter:
+            self.log.verbose(tpe)
+            return tpe(self.vim, tpe.convert_data(Map(rules)))  # type: ignore
+        return (
+            Either.import_name('{}.base'.format(formatter_mod),
+                               'VimDict{}'.format(name)) /
+            cons
+        )
+
+    def builtin_formatter(self, lang: str, name: str
+                          ) -> Either[str, Formatter]:
+        return (
+            Either.import_name('{}.{}'.format(formatter_mod, lang),
+                               'Vim{}'.format(name)) /
+            __(self.vim)
+        )
 
     def with_match_msg(self, f: Callable[[ParserBase], Either]) -> Either:
         return (self.data.parser(self.msg.parser) //

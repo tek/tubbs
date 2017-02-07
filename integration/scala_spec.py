@@ -3,7 +3,7 @@ from integration._support.base import TubbsPluginIntegrationSpec
 from amino.test.path import fixture_path
 
 from kallikrein.expectation import Expectation
-from amino import List, Path
+from amino import List, Path, Map
 
 
 class ScalaSpec(TubbsPluginIntegrationSpec):
@@ -51,8 +51,7 @@ object Ob1
 
 format_at_def_target = '''package pack
 
-object Ob2
-{
+object Ob2 {
   def fun1[TPar1 <: UB1: TC1]
   (par1a: Tpe1, par1b: Tpe1)
   (par2a: Tpe2, par2b: Tpe2)
@@ -70,11 +69,33 @@ object Ob2
   }
 }'''
 
+format_dict_def_target = '''package pack
+
+object Ob2 {
+  def fun1[TPar1 <: UB1: TC1](par1a: Tpe1, par1b: Tpe1)
+  (par2a: Tpe2, par2b: Tpe2)
+  (implicit par3: Tpe3, par4: Tpe4) = {
+    val a = par1a match {
+      case _: Tpe1 => {
+        println("Tpe1")
+        }
+        case Tpe2(f) => par1b map f
+        case _ => {
+          val v1 = fun2(par1);
+          fun3(v1)
+          }
+          }
+          }
+}'''
+
 
 class ScalaFormatSpec(TubbsPluginIntegrationSpec):
-    ''' formatting scala code
+    '''formatting scala code
+
     format a function def via range $format_range_def
     format a line $format_line
+    format via gqq and 'formatexpr' $formatexpr
+    format via custom dict $dict
     '''
 
     def edit_file(self, fpath: Path) -> None:
@@ -92,12 +113,41 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
 
     def format_range_def(self) -> Expectation:
         self.edit_file(self.scala_file1)
-        self.json_cmd_sync('TubFormatRange', start=5)
+        self.json_cmd_sync('TubFormatRange', start=4)
         return self._buffer_content(List.lines(format_range_def_target))
 
     def format_line(self) -> Expectation:
         self.edit_file(self.scala_file2)
-        self.json_cmd_sync('TubFormatAt 9')
+        self.json_cmd_sync('TubFormatAt 8')
         return self._buffer_content(List.lines(format_at_def_target))
+
+    def formatexpr(self) -> Expectation:
+        self.edit_file(self.scala_file2)
+        self.vim.buffer.options.set('formatexpr', 'TubFormat(\'8\')')
+        self.vim.window.set_cursor(9)
+        self.vim.cmd_sync('normal gqq')
+        return self._buffer_content(List.lines(format_at_def_target))
+
+    def dict(self) -> Expectation:
+        breaks = Map(
+            map_case_clause=('casekw', 1.0, 0.0),
+            map_block_body=('head', 0.9, 0.0),
+            list_block_rest_stat=('stat', 0.9, 0.0),
+            token_seminl_semi=('semi', 0.0, 1.1),
+            token_lbrace=('lbrace', 0.0, 1.0),
+            token_rbrace=('rbrace', 1.0, 0.0),
+            map_implicit_param_clause=('lpar', 0.9, 0.1),
+        )
+        indents = Map(
+            case_clauses=1,
+            block_body=1,
+        )
+        self.vim.vars.set_p('scala_breaks', breaks)
+        self.vim.vars.set_p('scala_indents', indents)
+        self.edit_file(self.scala_file2)
+        self.vim.buffer.options.set('formatexpr', 'TubFormat(\'8\')')
+        self.vim.window.set_cursor(9)
+        self.vim.cmd_sync('normal gqq')
+        return self._buffer_content(List.lines(format_dict_def_target))
 
 __all__ = ('ScalaSpec',)
