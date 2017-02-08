@@ -10,7 +10,7 @@ from amino import __, L, _, Task, Either, Maybe, Right, List, Map
 from tubbs.state import TubbsComponent, TubbsTransitions
 
 from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
-                                        FormatRange, FormatAt)
+                                        FormatRange, FormatAt, FormatExpr)
 from tubbs.plugins.core.crawler import Crawler, Match
 from tubbs.grako.base import ParserBase
 from tubbs.formatter.facade import FormattingFacade, Formatted, Range
@@ -40,11 +40,12 @@ class CoreTransitions(TubbsTransitions):
         return self.with_match_msg(self.visual).lmap(Fatal)
 
     @handle(FormatRange)
-    def format_range(self) -> Maybe[Message]:
+    def format_range(self) -> Either[str, Message]:
         start = (
             self.msg.options.get('start')
             .o(lambda: self.vim.window.line) //
-            parse_int
+            parse_int /
+            (_ - 1)
         )
         end = self.msg.options.get('end').o(start) // parse_int
         load = lambda s, e: self.load_and_run(L(Format)(_, (s, e)) >> Right)
@@ -59,15 +60,21 @@ class CoreTransitions(TubbsTransitions):
     def format_at(self) -> Message:
         return FormatRange(options=(Map(start=self.msg.line)))
 
+    @may_handle(FormatExpr)
+    def format_expr(self) -> Message:
+        line = self.msg.line
+        count = self.msg.count
+        return FormatRange(options=(Map(start=line, end=line + count - 1)))
+
     @handle(Format)
-    def format(self) -> Maybe[Message]:
-        start, end = self.msg.range
+    def format(self) -> Either[str, Message]:
         return (
             (self.data.parser(self.msg.parser) &
              self.formatters(self.msg.parser))
             .flat_map2(L(self._format)(_, _, self.msg.range))
             .map(L(self.update_range)(_, self.msg.range))
-        ).lmap(Fatal)
+            .lmap(Fatal)
+        )
 
     @property
     def parser_name(self) -> Either[str, str]:
@@ -103,7 +110,6 @@ class CoreTransitions(TubbsTransitions):
     def dict_formatter(self, lang: str, name: str, rules: dict
                        ) -> Either[str, Formatter]:
         def cons(tpe: type) -> Formatter:
-            self.log.verbose(tpe)
             return tpe(self.vim, tpe.convert_data(Map(rules)))  # type: ignore
         return (
             Either.import_name('{}.base'.format(formatter_mod),

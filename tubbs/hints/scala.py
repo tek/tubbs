@@ -7,18 +7,18 @@ from amino.regex import Regex
 class DefHint(RegexHint):
 
     @property
-    def regex(self):
+    def regex(self) -> Regex:
         return Regex(r'^\s+(def)\b')
 
     @property
-    def rules(self):
+    def rules(self) -> List[str]:
         return List('funDef')
 
 
 class Hints(HintsBase):
 
     @property
-    def hints(self):
+    def hints(self) -> Map[str, List[Hint]]:
         return Map({'def': List(DefHint())})
 
 __all__ = ('Hints',)

@@ -16,12 +16,29 @@ Individual grammar rules can be used as basis for operator mappings by using
 the functions `TubA` and `TubI` with the rule name as argument.
 
 ```viml
-omap ad :call TubA('def')<cr>
+onoremap ad :call TubA('def')<cr>
 ```
 
 # Formatting
+**tubbs** provides low- and high-level tools for formatting code based on a
+grammar.
+An arbitrary sequence of formatting routines can be chained to process the
+abstract syntax tree that's annotated with the labels of each sub-AST and the
+names of the rules that produce them.
 
-> TODO
+The simple way requires a dictionary that maps the names of rules and/or sub
+ASTs to values indicating what action to perform. There are two major
+formatters, for breaking lines and setting their indent.
+
+## Breaking lines
+
+## Indenting lines
+
+## formatexpr
+To use **tubbs** with regular vim formatting via the `gq` operator:
+```viml
+set formatexpr=TubFormat(v:lnum,\ v:count)
+```
 
 # EBNF
 

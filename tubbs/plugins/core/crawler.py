@@ -75,7 +75,7 @@ class Crawler(Logging):
         self.content = content
         self.line = line
         self.parser = parser
-        self.hints = hints
+        self.hints = hints.to_either('no hints specified')
 
     def find_and_parse(self, ident: str, linewise: bool=True) -> Either:
         return self.find(ident, linewise) // L(self._parse)(ident, _)
@@ -90,7 +90,15 @@ class Crawler(Logging):
 
     @property
     def parsable_range(self) -> Either:
-        return (self.hints / _.hints.k | List()).find_map(self.find_and_parse)
+        err = 'could not find parsable range for {}'
+        return (
+            self.hints
+            .map(_.hints.k)
+            .flat_map(
+                __.find_map(self.find_and_parse)
+                .to_either(err.format(self.hints.value))
+            )
+        )
 
     def _default_start(self, ident: str) -> Either:
         return self.line / L(HintMatch.from_attr)('line')(_, rules=List(ident))

@@ -95,6 +95,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
     format a function def via range $format_range_def
     format a line $format_line
     format via gqq and 'formatexpr' $formatexpr
+    format via 'formatexpr' with multiple line range $formatexpr_multi
     format via custom dict $dict
     '''
 
@@ -113,7 +114,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
 
     def format_range_def(self) -> Expectation:
         self.edit_file(self.scala_file1)
-        self.json_cmd_sync('TubFormatRange', start=4)
+        self.json_cmd_sync('TubFormatRange', start=5, end=5)
         return self._buffer_content(List.lines(format_range_def_target))
 
     def format_line(self) -> Expectation:
@@ -121,11 +122,20 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         self.json_cmd_sync('TubFormatAt 8')
         return self._buffer_content(List.lines(format_at_def_target))
 
-    def formatexpr(self) -> Expectation:
+    def setup_formatexpr(self) -> None:
         self.edit_file(self.scala_file2)
-        self.vim.buffer.options.set('formatexpr', 'TubFormat(\'8\')')
+        self.vim.buffer.options.set('formatexpr', 'TubFormat(v:lnum, v:count)')
+
+    def formatexpr(self) -> Expectation:
+        self.setup_formatexpr()
         self.vim.window.set_cursor(9)
         self.vim.cmd_sync('normal gqq')
+        return self._buffer_content(List.lines(format_at_def_target))
+
+    def formatexpr_multi(self) -> Expectation:
+        self.setup_formatexpr()
+        self.vim.window.set_cursor(9)
+        self.vim.cmd_sync('normal gqj')
         return self._buffer_content(List.lines(format_at_def_target))
 
     def dict(self) -> Expectation:
@@ -144,8 +154,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         )
         self.vim.vars.set_p('scala_breaks', breaks)
         self.vim.vars.set_p('scala_indents', indents)
-        self.edit_file(self.scala_file2)
-        self.vim.buffer.options.set('formatexpr', 'TubFormat(\'8\')')
+        self.setup_formatexpr()
         self.vim.window.set_cursor(9)
         self.vim.cmd_sync('normal gqq')
         return self._buffer_content(List.lines(format_dict_def_target))
