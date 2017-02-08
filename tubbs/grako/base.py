@@ -40,7 +40,7 @@ class ParserBase(Logging, abc.ABC):
 
     @property
     def base_dir(self):
-        return Path(__file__).parent.parent.parent
+        return Path(__file__).parent.parent
 
     @property
     def chksums_path(self):
@@ -66,6 +66,8 @@ class ParserBase(Logging, abc.ABC):
                 self.chksum_path.read_bytes() != self.grammar_chksum)
 
     def gen(self):
+        self.parser_path.parent.mkdir(parents=True, exist_ok=True)
+        self.chksums_path.mkdir(parents=True, exist_ok=True)
         if not self.parser_path.is_file() or self.checksum_invalid:
             if self.parser_path.is_file():
                 self.parser_path.unlink()
@@ -115,7 +117,7 @@ class BuiltinParser(ParserBase):
 
     @property
     def parsers_path(self):
-        return self.base_dir / 'tubbs' / 'parsers'
+        return self.base_dir / 'parsers'
 
     @property
     def parser_path(self):

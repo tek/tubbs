@@ -11,10 +11,11 @@ setup(
     author_email='torstenschmits@gmail.com',
     license='MIT',
     url='https://github.com/tek/tubbs',
+    include_package_data=True,
     packages=find_packages(
         exclude=['unit', 'unit.*', 'integration', 'integration.*']),
     install_requires=[
-        'ribosome',
+        'ribosome>=10.0.3',
         'hues',
     ],
     tests_require=[
