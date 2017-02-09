@@ -200,7 +200,7 @@ refinedType = compoundpre:annotOrRegularType refine:refinements;
 compoundType =
   | refinedType
   | refinementTemplate
-  | simpleType
+  # | simpleType
   ;
 infixTypeRest = infix:id [nl:nl] rhs:compoundType;
 infixType = infixhead:compoundType infixtail:{infixTypeRest}+;
@@ -370,6 +370,7 @@ anonFuncExprParams =
   | id
   | wildcard
   ;
+# TODO expr isn't reachable?
 anonFuncRhs =
   | blockBody
   | expr

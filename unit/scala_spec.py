@@ -135,6 +135,9 @@ class ScalaSpecBase(Logging):
     def stat(self, text: str, target: str) -> AstMap:
         return self.ast(text, 'templateStat', target)
 
+    def tpe(self, text: str, target: str) -> AstMap:
+        return self.ast(text, 'type', target)
+
 
 class ScalaSpec(ScalaSpecBase):
     '''scala ebnf
@@ -211,23 +214,23 @@ class ScalaSpec(ScalaSpecBase):
 
     def apply(self) -> Expectation:
         ast = self.expr('f(a)', 'applyExpr')
-        return k(ast.head_.args.head.args.head_.raw).must(contain('a'))
+        return k(ast.head.args.head.args.head.raw).must(contain('a'))
 
     def apply_chain(self) -> Expectation:
         ast = self.expr('f.g(a)', 'applyExpr')
-        return (k(ast.head_.pre.rule).must(equal('attrExpr')) &
-                k(ast.head_.args.head.args.head_.raw).must(contain('a')))
+        return (k(ast.head.pre.rule).must(equal('attrExpr')) &
+                k(ast.head.args.head.args.head.raw).must(contain('a')))
 
     def apply_string_literal(self) -> Expectation:
         word = List.random_alpha()
         ast = self.expr('foo("{}")'.format(word), 'applyExpr')
-        return k(ast.head_.args.head.args.head_.data.raw).must(contain(word))
+        return k(ast.head.args.head.args.head.data.raw).must(contain(word))
 
     def fundef(self) -> Expectation:
         ast = self.stat(fundef, 'templateStatDef')
         sig = ast.def_.def_.sig
         explicit = sig.paramss.explicit
-        id = explicit.last.params.head.tpe.id
+        id = explicit.last.params.last.tpe
         return (
             k(sig.id.raw).must(contain(funname)) &
             k(explicit.e / _.rule).must(contain('paramClauses')) &
@@ -253,16 +256,16 @@ class ScalaSpec(ScalaSpecBase):
 
     def rettype(self) -> Expectation:
         ast = self.ast(rettype, 'type')
-        return k(ast.simple.id.raw).must(contain(rettypeid))
+        return k(ast.simple.raw).must(contain(rettypeid))
 
     def typeargs(self) -> Expectation:
         ast = self.ast(typeargs, 'typeArgs')
-        return k(ast.types.head.id.raw).must(contain('A'))
+        return k(ast.types.head.raw).must(contain('A'))
         return k(ast.types.last.last.id).must(contain('Tpe6'))
 
     def pattern(self) -> Expectation:
         ast = self.ast('a: Type', 'pattern')
-        return k(ast.head_.last.last.raw).must(contain('Type'))
+        return k(ast.head.last.last.raw).must(contain('Type'))
 
     def caseclause(self) -> Expectation:
         ast = self.ast(caseclause, 'caseClause')
@@ -279,30 +282,30 @@ class ScalaSpec(ScalaSpecBase):
     def caseclauses(self) -> Expectation:
         ast = self.ast(caseclauses, 'caseClauses')
         return (
-            k(ast.head_.rhs.head_.raw).must(contain('1')) &
+            k(ast.head.rhs.head.raw).must(contain('1')) &
             k(ast.tail.head.case.rhs.raw).must(contain('3'))
         )
 
     def patmat(self) -> Expectation:
         ast = self.ast(patmat, 'patMat')
         return (
-            k(ast.cases.tail.head.case.pat.head_.raw).must(contain('_')) &
-            k(ast.cases.tail.head.case.rhs.head_.raw).must(contain('3'))
+            k(ast.cases.tail.head.case.pat.head.raw).must(contain('_')) &
+            k(ast.cases.tail.head.case.rhs.head.raw).must(contain('3'))
         )
 
     def patmat_assign(self) -> Expectation:
         ast = self.ast(patmat_assign, 'patVarDef')
         cases = ast.def_.rhs.cases
-        case1 = cases.head_
+        case1 = cases.head
         case2 = cases.tail.head.case
         return (
-            k(case1.pat.head_.last.last.raw).must(contain('Type')) &
-            k(case2.rhs.head_.raw).must(be_right(contain('3')))
+            k(case1.pat.head.last.last.raw).must(contain('Type')) &
+            k(case2.rhs.head.raw).must(be_right(contain('3')))
         )
 
     def result_type(self) -> Expectation:
         ast = self.ast(resulttype, 'def')
-        return (k(ast.def_.rhs.body.tail.head.stat.templ.head.head.id.raw)
+        return (k(ast.def_.rhs.body.tail.head.stat.templ.head.head.raw)
                 .must(contain('Cls')))
 
     def val_var_def(self) -> Expectation:
@@ -315,11 +318,11 @@ class ScalaSpec(ScalaSpecBase):
 
     def block_body(self) -> Expectation:
         ast = self.ast(block, 'blockBody')
-        return k(ast.head_[1].def_.rhs.raw).must(contain('1'))
+        return k(ast.head[1].def_.rhs.raw).must(contain('1'))
 
     def block_expr(self) -> Expectation:
         ast = self.ast(blockExpr, 'block')
-        return k(ast.body.head_[1].def_.rhs.raw).must(contain('1'))
+        return k(ast.body.head[1].def_.rhs.raw).must(contain('1'))
 
     def infix(self) -> Expectation:
         ast = self.ast('foo boo\n zoo', 'infixExpr')
@@ -332,12 +335,12 @@ class ScalaSpec(ScalaSpecBase):
 
     def broken(self) -> Expectation:
         ast = self.ast(broken_lines, 'def')
-        return (k(ast.def_.rhs.body.head_[1].def_.rhs.head_.pre.raw)
+        return (k(ast.def_.rhs.body.head[1].def_.rhs.head.pre.raw)
                 .must(contain('fun2')))
 
     def broken2(self) -> Expectation:
         ast = self.ast(broken_lines_2, 'def')
-        return (k(ast.def_.rhs.body.head_[1].def_.rhs.head_.pre.raw)
+        return (k(ast.def_.rhs.body.head[1].def_.rhs.head.pre.raw)
                 .must(contain('fun2')))
 
     def trait(self) -> Expectation:
@@ -346,8 +349,8 @@ class ScalaSpec(ScalaSpecBase):
 
     def argument_assign(self) -> Expectation:
         ast = self.ast(argument_assign, 'templateBody')
-        rhs = ast.stats.head_.body.head_[1].def_.rhs
-        return k(rhs.head_.args.head.args.head_.rhs.raw).must(contain('true'))
+        rhs = ast.stats.head.body.head[1].def_.rhs
+        return k(rhs.head.args.head.args.head.rhs.raw).must(contain('true'))
 
     def select(self) -> Expectation:
         ast = self.ast('a.b.c', 'path')
@@ -355,8 +358,8 @@ class ScalaSpec(ScalaSpecBase):
 
     def argument_select(self) -> Expectation:
         ast = self.ast(argument_select, 'templateBody')
-        rhs = ast.stats.head_.body.head_[1].def_.rhs
-        return (k(rhs.head_.args.head.args.head_.tail.head.id.raw)
+        rhs = ast.stats.head.body.head[1].def_.rhs
+        return (k(rhs.head.args.head.args.head.tail.head.id.raw)
                 .must(contain('b')))
 
     def import_(self) -> Expectation:
@@ -369,12 +372,12 @@ class ScalaSpec(ScalaSpecBase):
 
     def literal_apply_args(self) -> Expectation:
         ast = self.ast('"i".a(1)', 'simpleOrCompoundExpr')
-        return k(ast.head_.args.head.args.head_.raw).must(contain('1'))
+        return k(ast.head.args.head.args.head.raw).must(contain('1'))
 
     def literal_apply_args_as_arg(self) -> Expectation:
         ast = self.ast('f("i".a(1))', 'applyExpr')
-        args = ast.head_.args.head.args.head_.head_.args.head.args
-        return k(args.head_.raw).must(contain('1'))
+        args = ast.head.args.head.args.head.head.args.head.args
+        return k(args.head.raw).must(contain('1'))
 
     def cls_inst_attr(self) -> Expectation:
         ast = self.ast(cls_inst_attr, 'expr')
@@ -382,19 +385,19 @@ class ScalaSpec(ScalaSpecBase):
 
     def cls_inst_attr_assign(self) -> Expectation:
         ast = self.ast(cls_inst_attr_assign, 'templateBody')
-        rhs = ast.stats.head_.body.head_[1].def_.rhs
+        rhs = ast.stats.head.body.head[1].def_.rhs
         return (
-            k(rhs.head_.templ.head.head.id.raw).must(contain('Cls')) &
+            k(rhs.head.templ.head.head.raw).must(contain('Cls')) &
             k(rhs.tail.head.id.raw).must(contain('c'))
         )
 
     def triple_bool(self) -> Expectation:
         ast = self.ast(triple_bool, 'templateBody')
-        return k(ast.stats.head_.body.head_.right.right.raw).must(contain('c'))
+        return k(ast.stats.head.body.head.right.right.raw).must(contain('c'))
 
     def select_template(self) -> Expectation:
         ast = self.ast('{a.b.c}', 'template')
-        expr = ast.stats.stats.head_
+        expr = ast.stats.stats.head
         return (
             k(expr.rule).must(equal('attrExpr')) &
             k(expr.tail.last.id.raw).must(contain('c'))
@@ -406,7 +409,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def attr_assign_template(self) -> Expectation:
         ast = self.ast(attr_assign_template, 'template')
-        return k(ast.stats.stats.head_.rule).must(equal('attrAssignExpr'))
+        return k(ast.stats.stats.head.rule).must(equal('attrAssignExpr'))
 
     def ws_op_char(self) -> Expectation:
         return k(self.parse(' ', 'OpChar')).must(be_left)
@@ -429,31 +432,28 @@ class ScalaSpec(ScalaSpecBase):
 
     def assign_ext(self) -> Expectation:
         ast = self.ast(assign_ext, 'attrAssignExpr')
-        return (k(ast.rhs.head_.exprs.head_.left.exprs.head_.method.raw)
+        return (k(ast.rhs.head.exprs.head.left.exprs.head.method.raw)
                 .must(contain('++')))
 
     def complex_eta(self) -> Expectation:
-        ast = self.ast(complex_eta, 'expr')
-        return (
-            k(ast.rule).must(equal('etaExpansion')) &
-            k(ast.expr.typeargs.types.head.id.raw).must(contain('A'))
-        )
+        ast = self.expr(complex_eta, 'etaExpansion')
+        return k(ast.expr.typeargs.types.head.raw).must(contain('A'))
 
     def chained_apply(self) -> Expectation:
         ast = self.ast(chained_apply, 'expr')
-        return (k(ast.tail.head.args.head.args.head_.raw)
+        return (k(ast.tail.head.args.head.args.head.raw)
                 .must(contain('f')))
 
     def modifiers(self) -> Expectation:
         ast = self.ast('{private final val a = 1}', 'template')
-        return k(ast.stats.stats.head_.mod.last.raw).must(contain('final'))
+        return k(ast.stats.stats.head.mod.last.raw).must(contain('final'))
 
     def apply_attr_type_args(self) -> Expectation:
         ast = self.ast(apply_attr_type_args, 'template')
         return (
-            k(ast.stats.stats.head_.head_.pre.rule)
+            k(ast.stats.stats.head.head.pre.rule)
             .must(equal('attrExprTypeArgs')) &
-            (k(ast.stats.stats.head_.head_.pre.typeargs.types.head.id.raw))
+            (k(ast.stats.stats.head.head.pre.typeargs.types.head.raw))
             .must(contain('C'))
         )
 
@@ -467,12 +467,12 @@ class ScalaSpec(ScalaSpecBase):
             go('a.b(c) = d') &
             go('(a.b ++ a.b)(c) = d') &
             k(ast.rhs.raw).must(contain('d')) &
-            k(ast.expr.head_.rule).must(equal('superAttr'))
+            k(ast.expr.head.rule).must(equal('superAttr'))
         )
 
     def case_unapply(self) -> Expectation:
         ast = self.ast(case_unapply, 'block')
-        return (k(ast.body.head_.pat.head_.pats.tail.pats.head_.head_.raw)
+        return (k(ast.body.head.pat.head.pats.tail.pats.head.head.raw)
                 .must(contain('_')))
 
     def equal(self) -> Expectation:
@@ -492,15 +492,15 @@ class ScalaSpec(ScalaSpecBase):
 
     def paramless_anonymous_fun(self) -> Expectation:
         ast = self.ast('{() => 1}', 'block')
-        return k(ast.body.head_.rhs.raw).must(contain('1'))
+        return k(ast.body.head.rhs.head.raw).must(contain('1'))
 
     def paren_infix(self) -> Expectation:
         ast = self.expr('(a\n|| b // comm\n|| c)', 'parenthesizedExprsExpr')
-        return k(ast.exprs.head_.right.right.raw).must(contain('c'))
+        return k(ast.exprs.head.right.right.raw).must(contain('c'))
 
     def type_attr_args(self) -> Expectation:
-        ast = self.ast('a.B[A]', 'type')
-        return k(ast.args.types.head_.raw).must(contain('A'))
+        ast = self.tpe('a.B[A]', 'appliedType')
+        return k(ast.args.types.head.raw).must(contain('A'))
 
     def infix_inst_oper(self) -> Expectation:
         ast = self.ast('new A a()', 'expr')
@@ -519,11 +519,11 @@ class ScalaSpec(ScalaSpecBase):
 
     def string_context(self) -> Expectation:
         ast = self.ast('sm"""sdf\nasdf"""', 'templateStat')
-        return k(ast).must(equal(1))
+        return k(ast.lquote.context.raw).must(contain('sm'))
 
     def single_line_cases(self) -> Expectation:
         ast = self.ast('{ case a => b c d case _ => 2 }', 'blockExprContent')
-        return k(ast).must(equal(1))
+        return k(ast.head.body.tail.head.case.rhs.raw).must(contain('2'))
 
 stat = '''\
 def fun[A, B, C](p1: Type1, p2: Type2)\
