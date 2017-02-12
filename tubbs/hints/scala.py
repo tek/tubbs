@@ -8,11 +8,11 @@ class DefHint(RegexHint):
 
     @property
     def regex(self) -> Regex:
-        return Regex(r'^\s+(def)\b')
+        return Regex(r'.*\b(def)\b')
 
     @property
     def rules(self) -> List[str]:
-        return List('funDef')
+        return List('templateStatDef')
 
 
 class Hints(HintsBase):

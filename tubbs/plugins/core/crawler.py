@@ -6,9 +6,10 @@ from tubbs.logging import Logging
 from tubbs.grako.ast import AstMap
 
 from amino import Maybe, __, L, _, List, Map, Either
+from amino.regex import Match
 
 
-class Match(Record):
+class StartMatch(Record):
     ast = field(AstMap)
     rule = str_field()
     ident = str_field()
@@ -78,14 +79,14 @@ class Crawler(Logging):
         self.hints = hints.to_either('no hints specified')
 
     def find_and_parse(self, ident: str, linewise: bool=True) -> Either:
-        return self.find(ident, linewise) // L(self._parse)(ident, _)
+        line = self.find(ident, linewise)
+        return self._parse(ident, line)
 
     def find(self, ident: str, linewise: bool=True) -> Either:
         self.log.debug('crawling for {}'.format(ident))
         return (
-            (self.hints // __.find(self.content, self.line, ident))
-            .to_either('no hint matched for {}'.format(ident))
-            .o(L(self._default_start)(ident))
+            (self.hints // __.find(self.content, self.line, ident)) |
+            L(self._default_start)(ident)
         )
 
     @property
@@ -101,7 +102,7 @@ class Crawler(Logging):
         )
 
     def _default_start(self, ident: str) -> Either:
-        return self.line / L(HintMatch.from_attr)('line')(_, rules=List(ident))
+        return HintMatch(line=self.line, rules=List(ident))
 
     def _parse(self, ident: str, match: Match) -> Either:
         self.log.debug('parsing {} for {}'.format(match, ident))
@@ -109,8 +110,8 @@ class Crawler(Logging):
         def match_rule(rule: str) -> Either:
             return (
                 self.parser.parse(text, rule) /
-                L(Match.from_attr('ast'))(_, rule=rule, ident=ident,
-                                          hint=match)
+                L(StartMatch.from_attr('ast'))(_, rule=rule, ident=ident,
+                                               hint=match)
             )
         return (
             match.rules
