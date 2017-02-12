@@ -17,6 +17,8 @@ setup(
     install_requires=[
         'ribosome>=10.0.3',
         'hues',
+        'grako',
+        'regex',
     ],
     tests_require=[
         'kallikrein',
