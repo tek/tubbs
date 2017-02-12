@@ -44,15 +44,25 @@ class FormattingFacadeSpec:
         self.parser = Parser()
         self.parser.gen()
 
-    def scala(self, formatters: List[Formatter]) -> Expectation:
+    def facade(self, formatters: List[Formatter]) -> FormattingFacade:
         hints = Hints()
-        facade = FormattingFacade(self.parser, formatters, Just(hints))
+        return FormattingFacade(self.parser, formatters, Just(hints))
+
+    @property
+    def default_formatters(self) -> List[Formatter]:
+        return List(Breaker(40), Indenter(2))
+
+    @property
+    def default_facade(self) -> FormattingFacade:
+        return self.facade(self.default_formatters)
+
+    def scala(self, formatters: List[Formatter]) -> Expectation:
+        facade = self.facade(formatters)
         result = facade.format(self.lines, (9, 10)) / _.lines
         return k(result).must(contain(Lists.lines(target)))
 
     def scala_default(self) -> Expectation:
-        formatters = List(Breaker(40), Indenter(2))
-        return self.scala(formatters)
+        return self.scala(self.default_formatters)
 
     def scala_dict(self) -> Expectation:
         breaks = Map(

@@ -159,4 +159,4 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         self.vim.cmd_sync('normal gqq')
         return self._buffer_content(List.lines(format_dict_def_target))
 
-__all__ = ('ScalaSpec',)
+__all__ = ('ScalaSpec', 'ScalaFormatSpec')

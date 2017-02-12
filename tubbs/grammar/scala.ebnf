@@ -12,9 +12,13 @@ eol = nl | seminl;
 UnicodeEscape = '\u' {'u'} HexDigit HexDigit HexDigit HexDigit;
 HexDigit = /[0-9A-Fa-f]/;
 WhiteSpace = '\u0020' | '\u0009' | '\u000D' | '\u000A';
-Upper = /[A-Z$]/;
-Lower = /[a-z]/;
-Letter = Upper | Lower;
+UnicodeUpper = /./;
+UnicodeLower = /./;
+UnicodeLetterMisc = /./;
+UnicodeOpchar = /./;
+Upper = UnicodeUpper;
+Lower = UnicodeLower;
+Letter = Upper | Lower | UnicodeLetterMisc;
 Digit = /\d/;
 paren = '(' | ')' | '[' | ']' | '{' | '}';
 delim = '`' | "'" | '"' | '.' | ';' | ',';
@@ -36,7 +40,7 @@ OpcharBlocker =
   ;
 PrintableChar = /[\u0020-\u007F]/;
 PrintableCharNoWs = /[\u0021-\u007F]/;
-Opchar = !OpcharBlocker PrintableCharNoWs;
+Opchar = !OpcharBlocker (PrintableCharNoWs | UnicodeOpchar);
 CharEscapeSeq = '\' ('b' | 't' | 'n' | 'f' | 'r' | '"' | "'" | '\');
 lpar = par:'(' [nl:nl];
 rpar = [nl:nl] par:')';
@@ -165,11 +169,14 @@ functionArgTypes = infixType
 existentialClause = 'forSome' '{' existentialDcl {eol existentialDcl} '}';
 existentialDcl = typekw typeDcl
   | 'val' valDcl;
-typeProjection = regularType projectOp id;
+typeProjectionPre =
+  | appliedType
+  | simpleType
+  ;
+typeProjection = pre:typeProjectionPre hash:projectOp id:id;
 dependentType = path '.' typekw;
 parenthesizedTypes = lpar:lpar types:types rpar:rpar;
 simpleType =
-  | typeProjection
   | dependentType
   | parenthesizedTypes
   | select
@@ -181,6 +188,7 @@ refineStat = dcl
   | typeDef;
 appliedType = simple:simpleType args:typeArgs;
 regularType =
+  | typeProjection
   | appliedType
   | simpleType
   ;
@@ -200,10 +208,13 @@ refinedType = compoundpre:annotOrRegularType refine:refinements;
 compoundType =
   | refinedType
   | refinementTemplate
-  # | simpleType
   ;
-infixTypeRest = infix:id [nl:nl] rhs:compoundType;
-infixType = infixhead:compoundType infixtail:{infixTypeRest}+;
+infixTypePart =
+  | compoundType
+  | simpleType
+  ;
+infixTypeRest = infix:id [nl:nl] rhs:infixTypePart;
+infixType = head:infixTypePart tail:{infixTypeRest}+;
 functionType = args:functionArgTypes arrow:arrow tpe:type;
 infixExistentialType = tpe:infixType exi:existentialClause;
 type =
@@ -467,7 +478,7 @@ params = init:{param ','} last:(variadicParam | param);
 paramClause = [nl1:nl] lpar:lpar !'implicit' [params:params] rpar:rpar;
 implicitParamClause = [nl1:nl] lpar:lpar implicitkw:'implicit' [nl2:nl]
 params:params rpar:rpar;
-paramClauses = explicit:{paramClause}+ [implicits:implicitParamClause];
+paramClauses = explicit:{paramClause}* [implicit:implicitParamClause];
 
 classParam = {annotation} {modifier} [('val' | 'var')] id ':' paramType [assign expr];
 classParams = classParam {',' classParam};
@@ -488,8 +499,8 @@ accessQualifier = lbrack:lbrack (id | 'this') rbrack:rbrack;
 annotation = '@' regularType {argumentsExpr};
 constrAnnotation = '@' regularType argumentsExpr;
 
-templateStatDef = {anno:annotation [nl]} {mod:modifier} def:def;
-templateStatDcl = {anno:annotation [nl]} {mod:modifier} dcl:dcl;
+templateStatDef = {anno:annotation [nl:nl]} {mod:modifier} def:def;
+templateStatDcl = {anno:annotation [nl:nl]} {mod:modifier} dcl:dcl;
 templateStat1 =
   | comment
   | import
@@ -566,8 +577,9 @@ arrow:arrow rhs:blockBody;
 resultExpr =
   | expr
   | arrow blockBody;
-blockStatDef = {annotation} ['implicit' | 'lazy'] def;
-blockStatTemplDef = {annotation} {localModifier} tmplDef;
+blockStatMod = 'implicit' | 'lazy';
+blockStatDef = anno:{annotation} [mod:blockStatMod] def:def;
+blockStatTemplDef = anno:{annotation} mod:{localModifier} def:tmplDef;
 blockStat1 =
   | comment
   | import

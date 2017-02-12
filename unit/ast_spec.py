@@ -1,84 +1,98 @@
-from amino.test import Spec, temp_dir
+from amino.test import temp_dir
 from amino.test.path import fixture_path
-from amino import _, __
+
+from kallikrein import Expectation, k, unsafe_k
+from kallikrein.matchers.either import be_right
+from kallikrein.matchers import contain
+from kallikrein.expectable import Expectable
+from amino import _, Either, Path
 
 from tubbs.grako.base import BuiltinParser
 from tubbs.formatter.tree import Tree
+from tubbs.grako.ast import AstElem
 
 
 class Parser(BuiltinParser):
 
     @property
-    def module_base(self):
+    def module_base(self) -> str:
         return 'unit._temp.parser'
 
     @property
-    def parsers_path(self):
+    def parsers_path(self) -> Path:
         return temp_dir('parser')
 
     @property
-    def grammar_path(self):
+    def grammar_path(self) -> Path:
         return fixture_path('parser')
 
     @property
-    def name(self):
+    def name(self) -> str:
         return 'spec1'
 
 
-class AstSpec(Spec):
+class AstSpec:
+    ''' AST
+    positions of tokens $token_position
+    range of a list $list_range
+    positive closure $positive_closure
+    pre-token whitespace $whitespace
+    '''
 
-    def setup(self):
-        super().setup()
+    def setup(self) -> None:
         self._parser = Parser()
         self._parser.gen()
 
-    def _parse(self, text, rule):
+    def parse(self, text: str, rule: str) -> Either[str, AstElem]:
         return self._parser.parse(text, rule)
 
-    def _ast(self, text, rule):
-        res = self._parse(text, rule)
-        res.should.be.right
+    def ast(self, text: str, rule: str) -> AstElem:
+        res = self.parse(text, rule)
+        unsafe_k(res).must(be_right)
         return res.value
 
-    def token_position(self):
+    def token_position(self) -> Expectation:
         data = 'tok foo bar'
-        ast = self._ast(data, 'ids')
+        ast = self.ast(data, 'ids')
         tok1 = ast.l._data
         tok2 = ast.r._data
-        tok1.pos.should.equal(4)
-        tok2.pos.should.equal(8)
-        tok2.endpos.should.equal(11)
+        return (k(tok1.pos) == 4) & (k(tok2.pos) == 8) & (k(tok2.endpos) == 11)
 
-    def list_range(self):
+    def list_range(self) -> Expectation:
         clos = ', bar, zam'
-        data = f'tok(foo{clos})'
-        ast = self._ast(data, 'call')
+        data = 'tok(foo{})'.format(clos)
+        ast = self.ast(data, 'call')
         start, end = ast.rest._data.range
-        start.should.equal(7)
-        end.should.equal(17)
         tree = Tree(ast)
-        tree.root.sub[3].text.should.equal(clos)
+        return (
+            (k(start) == 7) &
+            (k(end) == 17) &
+            (k(tree.root.sub[3].text) == clos)
+        )
 
-    def positive_closure(self):
+    def positive_closure(self) -> Expectation:
         data = 'tok: foo bar baz'
-        ast = self._ast(data, 'poswrap')
-        ast.clos.id
+        ast = self.ast(data, 'poswrap')
+        return k(ast.clos.id.last.raw).must(contain('baz'))
 
-    def whitespace(self):
+    def whitespace(self) -> Expectation:
         i = 4
         ws = ' ' * i
         data = '{}tok: foo,  bar,baz'.format(ws)
-        ast = self._ast(data, 'ws')
+        ast = self.ast(data, 'ws')
         tree = Tree(ast)
         root = tree.root
-        root.indent.should.equal(i)
         args = (root.sub.last / _.sub).x
-        indent = lambda i: (args.lift(i) / _.indent)
-        indent(0).should.contain(1)
-        indent(1).should.contain(0)
-        indent(2).should.contain(2)
-        indent(3).should.contain(0)
-        indent(4).should.contain(0)
-        root.with_ws.should.equal(data)
+        def indent(i: int) -> Expectable:
+            return k(args.lift(i) / _.indent)
+        return (
+            (k(root.indent) == i) &
+            (indent(0).must(contain(1))) &
+            (indent(1).must(contain(0))) &
+            (indent(2).must(contain(2))) &
+            (indent(3).must(contain(0))) &
+            (indent(4).must(contain(0))) &
+            (k(root.with_ws) == data)
+        )
 
 __all__ = ('AstSpec',)

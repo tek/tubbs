@@ -1,9 +1,12 @@
 from functools import namedtuple
+from typing import Any
 
-from grako.exceptions import FailedKeywordSemantics
+from grako.exceptions import FailedKeywordSemantics, FailedPattern
 from grako.parsing import Parser as GrakoParser
 from grako.ast import AST
-from grako.contexts import Closure
+from grako.contexts import Closure, graken
+
+import regex
 
 import amino
 from amino import L, _, List
@@ -76,34 +79,47 @@ FlattenToken = namedtuple('FlattenToken', 'data')
 class DataSemantics(Logging):
 
     def __init__(self) -> None:
-        self._flattened = False
+        self.made_token = False
 
-    def _special(self, ast, name):
-        handler = getattr(self, '_special_{}'.format(name),
-                          L(self._no_special)(name, _))
+    def special(self, ast, name):
+        handler = getattr(self, 'special_{}'.format(name),
+                          L(self._nospecial)(name, _))
         return handler(ast)
 
-    def _special_token(self, ast):
+    def special_token(self, ast: Any) -> AstToken:
+        self.made_token = True
+        return ast if isinstance(ast, AstToken) else self.flatten_token(ast)
+
+    def flatten_token(self, ast: Any) -> AstToken:
         raw = (flatten_list(ast) / _.raw).mk_string()
+        pos = (
+            ast[0].pos
+            if isinstance(ast, list) else
+            ast.head.e / _.pos | -1
+            if isinstance(ast, AstList) else
+            ast.pos
+            if isinstance(ast, AstToken) else
+            (-1)
+        )
         ws_count = (ast[0].ws_count
                     if isinstance(ast, list) else
                     ast.ws_count)
-        self._flattened = True
-        return AstToken(raw, 0, '', ws_count)
+        return AstToken(raw, pos, '', ws_count)
 
-    def _no_special(self, name, ast):
+    def _nospecial(self, name, ast):
         self.log.error('no handler for argument `{}` and {}'.format(name, ast))
         return ast
 
     def _default(self, ast, *a, **kw):
-        ast1 = List.wrap(a).head / L(self._special)(ast, _) | ast
+        ast1 = List.wrap(a).head / L(self.special)(ast, _) | ast
         return AstMap.from_ast(ast1) if isinstance(ast1, AST) else ast1
 
     def _postproc(self, parser, data):
-        if self._flattened:
+        if self.made_token:
             data._rule = parser._last_rule
-            data._pos = parser._last_pos
-            self._flattened = False
+            if data._pos == -1:
+                data._pos = parser._last_pos
+            self.made_token = False
 
 
 class ParserExt(GrakoParser):
@@ -148,14 +164,16 @@ class ParserExt(GrakoParser):
             self._last_ws = ws
 
     def _call(self, rule, name, params, kwparams):
-        self._pos_stack.append(self._pos)
-        result = GrakoParser._call(self, rule, name, params, kwparams)
-        wrapped = self._wrap_data(result, name)
-        if amino.development and isinstance(wrapped, list):
-            check_list(wrapped, name)
-        self._pos_stack.pop()
-        self._last_result = wrapped
-        return wrapped
+        try:
+            self._pos_stack.append(self._pos)
+            result = GrakoParser._call(self, rule, name, params, kwparams)
+            wrapped = self._wrap_data(result, name)
+            if amino.development and isinstance(wrapped, list):
+                check_list(wrapped, name)
+            self._last_result = wrapped
+            return wrapped
+        finally:
+            self._pos_stack.pop()
 
     def _add_cst_node(self, node):
         wrapped = self._wrap_data(node, self._last_rule)
@@ -186,5 +204,38 @@ class ParserExt(GrakoParser):
             name = name.upper()
         if name in self.keywords:
             raise FailedKeywordSemantics('"%s" is a reserved word' % name)
+
+    def _unicode_category(self, pat: str) -> str:
+        def err(p: str) -> None:
+            self._trace_match('', p, failed=True)
+            self._error(p, etype=FailedPattern)
+        token = self._buffer.matchre('.')
+        if token is None:
+            err('.')
+        else:
+            m = regex.match(pat, token)
+            if m is None:
+                err(pat)
+            else:
+                self._trace_match(token, pat)
+                self._add_cst_node(token)  # type: ignore
+                self._last_node = token
+                return token
+
+    @graken()
+    def _UnicodeUpper_(self) -> str:
+        return self._unicode_category('\p{Lu}')
+
+    @graken()
+    def _UnicodeLower_(self) -> str:
+        return self._unicode_category('\p{Ll}')
+
+    @graken()
+    def _UnicodeLetterMisc_(self) -> str:
+        return self._unicode_category('\p{Lo}|\p{Lt}|\p{Nl}')
+
+    @graken()
+    def _UnicodeOpchar_(self) -> str:
+        return self._unicode_category('\p{Sm}|\p{So}')
 
 __all__ = ('ParserExt', 'DataSemantics')

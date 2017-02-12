@@ -1,7 +1,7 @@
 from amino import List, _, Either
 from amino.test.path import load_fixture
 
-from kallikrein import k, unsafe_k
+from kallikrein import k, unsafe_k, pending
 from kallikrein.matchers import contain, equal
 from kallikrein.expectation import Expectation
 from kallikrein.matchers.either import be_left, be_right
@@ -142,6 +142,7 @@ class ScalaSpecBase(Logging):
 class ScalaSpec(ScalaSpecBase):
     '''scala ebnf
     keyword $keyword
+    special char id $special_char_id
     plain id should not eat whitespace $plainid_ws
     applyExpr $apply
     applyChain $apply_chain
@@ -203,10 +204,21 @@ class ScalaSpec(ScalaSpecBase):
     def with variadic params $splat_param
     string context $string_context
     case clause start without newline $single_line_cases
+    def with just implicit params $only_implicit_params
+    type lambda $type_lambda
+    symbolic infix type $symbolic_infix_type
+    token position $token_position
+    infix type operator position $infix_position
+    position inside case clause $case_clause_position
     '''
 
     def keyword(self) -> Expectation:
         return k(self.parse('case', 'plainidName')).must(be_left)
+
+    def special_char_id(self) -> Expectation:
+        lam = self.ast('λ', 'id')
+        arr = self.ast('→', 'op')
+        return (k(lam.raw) == equal('λ')) & (k(arr.raw) == '→')
 
     def plainid_ws(self) -> Expectation:
         result = self.parse('case _', 'plainidName')
@@ -314,7 +326,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def block_stat(self) -> Expectation:
         ast = self.ast(val_var_def, 'blockStat')
-        return k(ast[1].def_.rhs.raw).must(contain('1'))
+        return k(ast.def_.def_.rhs.raw).must(contain('1'))
 
     def block_body(self) -> Expectation:
         ast = self.ast(block, 'blockBody')
@@ -525,13 +537,33 @@ class ScalaSpec(ScalaSpecBase):
         ast = self.ast('{ case a => b c d case _ => 2 }', 'blockExprContent')
         return k(ast.head.body.tail.head.case.rhs.raw).must(contain('2'))
 
+    def only_implicit_params(self) -> Expectation:
+        ast = self.stat('def a(implicit b: A) = c', 'templateStatDef')
+        id = ast.def_.def_.sig.paramss.implicit.params.last.id
+        return k(id.raw).must(contain('b'))
+
+    def type_lambda(self) -> Expectation:
+        ast = self.tpe('A[B]#C', 'typeProjection')
+        return k(ast.id.raw).must(contain('C'))
+
+    def symbolic_infix_type(self) -> Expectation:
+        ast = self.ast('A :: B', 'infixType')
+        return k(ast.tail.head.infix.raw).must(contain('::'))
+
+    def token_position(self) -> Expectation:
+        ast = self.ast('def name[A]', 'dcl')
+        return k(ast.dcl.sig.id._data.pos) == 4
+
+    def infix_position(self) -> Expectation:
+        ast = self.ast('A :: B', 'infixType')
+        return k(ast.tail.head.infix._data.pos) == 2
+
+    def case_clause_position(self) -> Expectation:
+        ast = self.ast('val x = a match { case a: A => b case c => d }',
+                       'templateStat')
+        return k(ast.def_.def_.rhs.cases.head.rhs._data.pos) == 31
+
 stat = '''\
-def fun[A, B, C](p1: Type1, p2: Type2)\
-(implicit p3: A :: B, p4: Type4) = {
-    val a = p1 match {case x: Type2 => 5
-        case _ => 3
-    }
-}
 '''
 
 
@@ -545,19 +577,23 @@ class ScalaFileSpec(ScalaSpecBase):
 
     __unsafe__ = None
 
+    @pending
     def file(self) -> Expectation:
         content = load_fixture('parser', 'scala', 'file1.scala')
         ast = self.ast(content, 'compilationUnit')
         self.log.info(ast)
 
+    @pending
     def statement(self) -> Expectation:
         ast = self.ast(stat, 'templateStat')
         self.log.info(ast)
 
+    @pending
     def stat_block(self) -> Expectation:
         ast = self.ast('{{\n{}\n}}'.format(stat), 'template')
         self.log.info(ast)
 
+    @pending
     def temp2(self) -> Expectation:
         ast = self.ast('A :: B', 'infixType')
         self.log.info(ast)

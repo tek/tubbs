@@ -78,14 +78,15 @@ class AstList(AstElem):
 
     @property
     def ws_count(self):
-        return self.head / _.ws_count | 0
+        return self.head.e / _.ws_count | 0
 
     def __str__(self):
-        return '{}({})'.format(self.__class__.__name__, self.data.join_comma)
+        return '{}({}, {})'.format(self.__class__.__name__, self.rule,
+                                   self.data.join_comma)
 
     def __repr__(self):
-        return '{}({})'.format(self.__class__.__name__,
-                               (self.data / repr).join_comma)
+        return '{}({}, {})'.format(self.__class__.__name__, self.rule,
+                                   (self.data / repr).join_comma)
 
     @property
     def k(self):
