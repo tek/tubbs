@@ -3,17 +3,21 @@ from typing import Callable, Sized, Tuple, Any, Union
 
 from hues import huestr
 
-from amino import Either, List, L, Boolean, _, __, Left, Right, Maybe, Map
+from amino import (Either, List, L, Boolean, _, __, Left, Right, Maybe, Map,
+                   Empty, Task)
 from amino.util.string import snake_case
 from amino.func import dispatch
 from amino.regex import Regex
+from amino.lazy import lazy
 
-from ribosome.record import Record, int_field, float_field, field
+from ribosome.record import (Record, int_field, float_field, field, str_field,
+                             any_field)
 from ribosome.nvim import NvimFacade
 from ribosome.util.callback import VimCallback
 
 from tubbs.logging import Logging
-from tubbs.formatter.tree import Tree, MapNode, ListNode, TokenNode, Node
+from tubbs.formatter.tree import (Tree, MapNode, ListNode, TokenNode, Node,
+                                  Inode)
 
 
 def hl(data: str) -> str:
@@ -43,13 +47,36 @@ class VimFormatterMeta(abc.ABCMeta):
         return data
 
 
+class BreakHandler(Record):
+    handler = any_field()
+    rule = str_field()
+
+
 class Break(Record):
     position = int_field()
     prio = float_field()
+    rule = str_field()
 
     @property
     def _str_extra(self) -> List[Any]:
-        return List(self.position, self.prio)
+        return List(self.position, self.prio, self.rule)
+
+    def match_name(self, name: str) -> bool:
+        return name == self.rule
+
+
+class BreakState:
+
+    def __init__(self, node: Node, breaks: List[Break]) -> None:
+        self.node = node
+        self.breaks = breaks
+
+    @lazy
+    def after_breaks(self) -> List[Break]:
+        return self.breaks.filter(_.pos > self.node.pos)
+
+    def after(self, name: str) -> Boolean:
+        return self.after_breaks.exists(__.match_name(name))
 
 
 SingleBreakData = Tuple[str, float, float]
@@ -78,7 +105,10 @@ class BreakerBase(Formatter):
         ...
 
     def format(self, tree: Tree) -> Either:
-        return self.breaks(tree.root) / L(self.apply_breaks)(tree, _)
+        return (
+            self.breaks(tree.root, List()).attempt /
+            L(self.apply_breaks)(tree, _)
+        )
 
     def apply_breaks(self, tree: Tree, breaks: List[Break]) -> List[str]:
         self.log.debug('applying breaks: {}'.format(breaks))
@@ -122,28 +152,31 @@ class BreakerBase(Formatter):
         ).leffect(self.log.ddebug)
         return broken | List(cur)
 
-    def lookup_handler(self, node: Node, tmpl: str
-                       ) -> Callable[[Node], BreakData]:
-        def handler(suf: str, or_else: Callable=lambda: None) -> Callable:
+    def lookup_handler(self, node: Node, tmpl: str) -> BreakHandler:
+        def handler(suf: str, or_else: Callable=lambda: Empty()
+                    ) -> Maybe[BreakHandler]:
             attr = tmpl.format(suf)
             self.log.ddebug('trying break handler {}'.format(attr))
-            h = self.handler(node, attr)
-            if h is not None:
+            h = (self.handler(node, attr) /
+                 L(BreakHandler.from_attr('handler'))(_, rule=suf))
+            if h.present:
                 self.log.ddebug('success')
-            return h or or_else() or self.default_handler
+            return h.o(or_else)
         rule = snake_case(node.rule)
         return handler(
             '{}_{}'.format(rule, node.key),
             L(handler)(rule, L(handler)(node.key))
-        )
+        ) | BreakHandler(handler=self.default_handler, rule=rule)
 
-    def handle(self, node: Node, tmpl: str) -> Either:
-        result = self.lookup_handler(node, tmpl)(node)
+    def handle(self, node: Node, tmpl: str, breaks: List[Break]) -> Either:
+        handler = self.lookup_handler(node, tmpl)
+        result = handler.handler(BreakState(node, breaks))
         def is_break(a: Any) -> bool:
             return isinstance(a, Sized) and len(a) == 3
         def mkbreak(position: int, prio: float) -> Maybe:
-            return Boolean(prio > 0).m(Break(position=position,
-                                             prio=float(prio)))
+            return Boolean(prio > 0).m(
+                Break(position=position, prio=float(prio), rule=handler.rule)
+            )
         def mkbreaks(name: str, before: int, after: int) -> Either[str, List]:
             return node.sub_range(name).map2(
                 lambda start, end:
@@ -162,16 +195,33 @@ class BreakerBase(Formatter):
             mkbreakss(result)
         )
 
-    def break_map_node(self, node: MapNode) -> Either:
-        sub = node.sub.traverse(self.breaks, Either) / _.join
-        return (self.handle(node, 'map_{}') & sub).map2(lambda a, b: a + b)
+    def sub_breaks(self, node: Inode, breaks: List[Break]
+                   ) -> Task[List[Break]]:
+        return (
+            node.sub.traverse(L(self.breaks)(_, breaks), Task) /
+            _.join /
+            breaks.add
+        )
 
-    def break_list_node(self, node: ListNode) -> Either:
-        sub = node.sub.traverse(self.breaks, Either) / _.join
-        return (self.handle(node, 'list_{}') & sub).map2(lambda a, b: a + b)
+    def break_inode(self, node: Inode, breaks: List[Break], pref: str
+                    ) -> Task[List[Break]]:
+        return (
+            self.handle(node, '{}_{{}}'.format(pref), breaks).task() /
+            breaks.add //
+            L(self.sub_breaks)(node, _)
+        )
 
-    def break_token_node(self, node: TokenNode) -> Either:
-        return self.handle(node, 'token_{}')
+    def break_map_node(self, node: MapNode, breaks: List[Break]
+                       ) -> Task[List[Break]]:
+        return self.break_inode(node, breaks, 'map')
+
+    def break_list_node(self, node: ListNode, breaks: List[Break]
+                        ) -> Task[List[Break]]:
+        return self.break_inode(node, breaks, 'list')
+
+    def break_token_node(self, node: TokenNode, breaks: List[Break]
+                         ) -> Task[List[Break]]:
+        return self.handle(node, 'token_{}', breaks).task()
 
 
 class Breaker(BreakerBase):
@@ -180,8 +230,9 @@ class Breaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: Node, attr: str) -> Callable[[Node], BreakData]:
-        return getattr(self.rules, attr, None)
+    def handler(self, node: Node, attr: str
+                ) -> Maybe[Callable[[Node], BreakData]]:
+        return Maybe.check(getattr(self.rules, attr, None))
 
     @property
     def default_handler(self) -> Callable[[Node], BreakData]:
@@ -194,8 +245,9 @@ class DictBreaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: Node, attr: str) -> Callable[[Node], BreakData]:
-        return self.rules.lift(attr) / (lambda a: lambda node: a) | None
+    def handler(self, node: Node, attr: str
+                ) -> Maybe[Callable[[Node], BreakData]]:
+        return self.rules.lift(attr) / (lambda a: lambda node: a)
 
     @property
     def default_handler(self) -> Callable[[Node], BreakData]:

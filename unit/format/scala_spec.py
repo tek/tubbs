@@ -42,7 +42,7 @@ formatted_fun = '''def fun[A, B, C]
 }'''
 
 
-class FormatTreeSpec:
+class ScalaFormatSpec:
     ''' formatting an AST
     check ast element ranges $range
     break lines of a function $break_fun
@@ -133,4 +133,4 @@ class FormatTreeSpec:
         indented = indenter.format(tree)
         return k(indented / _.join_lines).must(contain(formatted_fun))
 
-__all__ = ('FormatTreeSpec',)
+__all__ = ('ScalaFormatSpec',)

@@ -1,11 +1,12 @@
-from amino import Left, Map
+from amino import Left
 from amino.util.string import snake_case
 
 from ribosome.util.callback import VimCallback
 from ribosome.nvim import NvimFacade
 
 from tubbs.formatter import base
-from tubbs.formatter.base import Formatter, BreakRules, IndentRules, BreakData
+from tubbs.formatter.base import (Formatter, BreakRules, IndentRules,
+                                  BreakData, BreakState)
 from tubbs.grako.ast import AstMap
 from tubbs.formatter.tree import Tree, Node
 
@@ -34,31 +35,31 @@ class VimFormatter(Formatter):
 
 class ScalaBreakRules(BreakRules):
 
-    def map_case_clause(self, node: Node) -> BreakData:
+    def map_case_clause(self, state: BreakState) -> BreakData:
         ''' TODO check parent; if more than one case is present, return
         1.0, else 0.9
         '''
         return 'casekw', 1.0, 0.0
 
-    def map_param_clause(self, node: Node) -> BreakData:
+    def map_param_clause(self, state: BreakState) -> BreakData:
         return 'lpar', 0.89, 0.1
 
-    def map_implicit_param_clause(self, node: Node) -> BreakData:
+    def map_implicit_param_clause(self, state: BreakState) -> BreakData:
         return 'lpar', 0.9, 0.1
 
-    def map_block_body(self, node: Node) -> BreakData:
+    def map_block_body(self, state: BreakState) -> BreakData:
         return 'head', 0.9, 0.0
 
-    def list_block_rest_stat(self, node: Node) -> BreakData:
+    def list_block_rest_stat(self, state: BreakState) -> BreakData:
         return 'stat', 0.9, 0.0
 
-    def token_seminl_semi(self, node: Node) -> BreakData:
+    def token_seminl_semi(self, state: BreakState) -> BreakData:
         return 'semi', 0.0, 1.1
 
-    def token_lbrace(self, node: Node) -> BreakData:
+    def token_lbrace(self, state: BreakState) -> BreakData:
         return 'lbrace', 0.0, 1.0
 
-    def token_rbrace(self, node: Node) -> BreakData:
+    def token_rbrace(self, state: BreakState) -> BreakData:
         return 'rbrace', 1.0, 0.0
 
 
