@@ -162,7 +162,6 @@ class ScalaSpec(ScalaSpecBase):
     pattern matching expression assigned to val $patmat_assign
     result type $result_type
     val definition $val_var_def
-    block statement $block_stat
     block body $block_body
     block expression $block_expr
     infix expression $infix
@@ -321,20 +320,16 @@ class ScalaSpec(ScalaSpecBase):
                 .must(contain('Cls')))
 
     def val_var_def(self) -> Expectation:
-        ast = self.ast(val_var_def, 'valVarDef')
-        return k(ast.def_.rhs.raw).must(contain('1'))
-
-    def block_stat(self) -> Expectation:
-        ast = self.ast(val_var_def, 'blockStat')
+        ast = self.stat(val_var_def, 'templateStatDef')
         return k(ast.def_.def_.rhs.raw).must(contain('1'))
 
     def block_body(self) -> Expectation:
         ast = self.ast(block, 'blockBody')
-        return k(ast.head[1].def_.rhs.raw).must(contain('1'))
+        return k(ast.head.def_.def_.rhs.raw).must(contain('1'))
 
     def block_expr(self) -> Expectation:
         ast = self.ast(blockExpr, 'block')
-        return k(ast.body.head[1].def_.rhs.raw).must(contain('1'))
+        return k(ast.body.head.def_.def_.rhs.raw).must(contain('1'))
 
     def infix(self) -> Expectation:
         ast = self.ast('foo boo\n zoo', 'infixExpr')
@@ -347,12 +342,12 @@ class ScalaSpec(ScalaSpecBase):
 
     def broken(self) -> Expectation:
         ast = self.ast(broken_lines, 'def')
-        return (k(ast.def_.rhs.body.head[1].def_.rhs.head.pre.raw)
+        return (k(ast.def_.rhs.body.head.def_.def_.rhs.head.pre.raw)
                 .must(contain('fun2')))
 
     def broken2(self) -> Expectation:
         ast = self.ast(broken_lines_2, 'def')
-        return (k(ast.def_.rhs.body.head[1].def_.rhs.head.pre.raw)
+        return (k(ast.def_.rhs.body.head.def_.def_.rhs.head.pre.raw)
                 .must(contain('fun2')))
 
     def trait(self) -> Expectation:
@@ -361,7 +356,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def argument_assign(self) -> Expectation:
         ast = self.ast(argument_assign, 'templateBody')
-        rhs = ast.stats.head.body.head[1].def_.rhs
+        rhs = ast.stats.head.body.head.def_.def_.rhs
         return k(rhs.head.args.head.args.head.rhs.raw).must(contain('true'))
 
     def select(self) -> Expectation:
@@ -370,7 +365,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def argument_select(self) -> Expectation:
         ast = self.ast(argument_select, 'templateBody')
-        rhs = ast.stats.head.body.head[1].def_.rhs
+        rhs = ast.stats.head.body.head.def_.def_.rhs
         return (k(rhs.head.args.head.args.head.tail.head.id.raw)
                 .must(contain('b')))
 
@@ -397,7 +392,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def cls_inst_attr_assign(self) -> Expectation:
         ast = self.ast(cls_inst_attr_assign, 'templateBody')
-        rhs = ast.stats.head.body.head[1].def_.rhs
+        rhs = ast.stats.head.body.head.def_.def_.rhs
         return (
             k(rhs.head.templ.head.head.raw).must(contain('Cls')) &
             k(rhs.tail.head.id.raw).must(contain('c'))
