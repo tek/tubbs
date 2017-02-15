@@ -101,6 +101,10 @@ class Node(Logging, abc.ABC):
     def flatten(self) -> 'List[Node]':
         ...
 
+    @abc.abstractproperty
+    def k(self) -> List[str]:
+        ...
+
 
 class Inode(Node):
 
@@ -180,6 +184,10 @@ class MapNode(Inode):
     def sub_range(self, name):
         return self.data.lift(name).e / _.range
 
+    @property
+    def k(self) -> List[str]:
+        return List.wrap(self.data.keys())
+
 
 class ListNode(Inode):
 
@@ -210,6 +218,10 @@ class ListNode(Inode):
             .to_either('{} not in {}'.format(name, self)) /
             _.range
         )
+
+    @property
+    def k(self) -> List[str]:
+        return self.data.k
 
 
 class TokenNode(Node):
@@ -265,6 +277,10 @@ class TokenNode(Node):
     @property
     def flatten(self):
         yield self
+
+    @property
+    def k(self) -> List[str]:
+        return List(self.key)
 
 
 def node(key: str, data: AstElem, parent: Node):

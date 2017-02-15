@@ -5,13 +5,13 @@ from ribosome.util.callback import VimCallback
 from ribosome.nvim import NvimFacade
 
 from tubbs.formatter import base
-from tubbs.formatter.base import (Formatter, BreakRules, IndentRules,
-                                  BreakData, BreakState)
-from tubbs.grako.ast import AstMap
+from tubbs.formatter.base import Formatter as FormatterBase, StrictBreakData
+from tubbs.formatter.base import BreakRules, IndentRules, BreakData, BreakState
+from tubbs.grako.ast import AstMap, AstElem, AstList
 from tubbs.formatter.tree import Tree, Node
 
 
-class Formatter(Formatter):
+class Formatter(FormatterBase):
 
     def no_rule(self, tree):
         return Left('cannot format rule `{}`'.format(tree.info.rule))
@@ -57,10 +57,27 @@ class ScalaBreakRules(BreakRules):
         return 'semi', 0.0, 1.1
 
     def token_lbrace(self, state: BreakState) -> BreakData:
-        return 'lbrace', 0.0, 1.0
+        def nonempty(ast: AstElem) -> bool:
+            return isinstance(ast, AstList) and ast.data.length > 0
+        multi = state.node.parent.parent.data.body.tail.e.exists(nonempty)
+        return 'lbrace', 0.0, (0.6 if multi else 0.3)
 
     def token_rbrace(self, state: BreakState) -> BreakData:
         return 'rbrace', 1.0, 0.0
+
+    def map_assign(self, state: BreakState) -> BreakData:
+        def decide(state: BreakState) -> StrictBreakData:
+            rhs = state.node.parent.data.rhs
+            lbrace = state.after('lbrace')
+            after = (
+                0.0
+                if state.node.parent.rule == 'param' else
+                0.3
+                if rhs.rule == 'block' and rhs.valid and lbrace else
+                0.8
+            )
+            return 'op', 0.0, after
+        return decide
 
 
 class Breaker(base.Breaker):
