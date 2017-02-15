@@ -5,6 +5,8 @@ from grako.ast import AST
 
 from hues import huestr
 
+from toolz import dissoc
+
 from amino import List, Empty, _, L, Maybe, Either, Left, Right, Boolean, Just
 from amino.func import call_by_name, dispatch_with
 from amino.boolean import true, false
@@ -81,7 +83,7 @@ class AstList(AstElem):
     __getitem__ = lift
 
     def copy(self, data):
-        return AstList(data, self._rule)
+        return AstList(data, self._rule, self.line)
 
     def cat(self, elem):
         return self.copy(self.data.cat(elem))
@@ -154,16 +156,22 @@ class AstToken(AstElem):
                                       huestr(self.raw).green.colorized))
 
 
-class AstMap(AstElem, AST):
+class AstMap(AstElem):
+
+    def __init__(self, ast: AST) -> None:
+        self.ast = ast
 
     @staticmethod
     def from_ast(ast: AST):
-        a = AstMap()
-        a.update(**ast)
-        a._order = ast._order
-        a._parseinfo = ast.parseinfo
-        a._closed = ast._closed
-        return a
+        return AstMap(ast)
+
+    @property
+    def as_dict(self) -> dict:
+        return dissoc(dict(self.ast), 'parseinfo')
+
+    @property
+    def parseinfo(self) -> dict:
+        return self.ast.parseinfo
 
     @property
     def rule(self):
@@ -183,10 +191,10 @@ class AstMap(AstElem, AST):
 
     def lift(self, key):
         msg = 'not present in AstMap({})'
-        return Maybe(Dict.get(self, key)).cata(
+        return Maybe(Dict.get(self.ast, key)).cata(
             L(SubAst.cons)(_, key, self.rule),
             lambda: SubAstInvalid(key, self.rule,
-                                  msg.format(' '.join(self.keys())))
+                                  msg.format(' '.join(self._k)))
         )
 
     def __getattr__(self, key):
@@ -196,10 +204,10 @@ class AstMap(AstElem, AST):
         return dict.get(self, key, default)
 
     def __str__(self):
-        return 'AstMap({}, {})'.format(self.rule, dict(self))
+        return 'AstMap({}, {})'.format(self.rule, self.as_dict)
 
     def __repr__(self):
-        return 'AstMap(\'{}\', {})'.format(self.rule, dict.__repr__(self))
+        return 'AstMap(\'{}\', {})'.format(self.rule, dict.__repr__(self.ast))
 
     @property
     def _keytree(self):
@@ -215,6 +223,10 @@ class AstMap(AstElem, AST):
     @property
     def keytree(self):
         return self._keytree.join_lines
+
+    @property
+    def _k(self) -> List[str]:
+        return self.ast.keys()
 
 A = TypeVar('A')
 

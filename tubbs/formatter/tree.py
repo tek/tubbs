@@ -167,7 +167,7 @@ class MapNode(Inode):
     @lazy
     def sub(self):
         return (
-            Map(valfilter(is_not_none, self.data))
+            Map(valfilter(is_not_none, self.data.as_dict))
             .to_list
             .map2(L(node)(_, _, self))
             .sort_by(_.pos)
