@@ -5,8 +5,9 @@ from grako.ast import AST
 
 from hues import huestr
 
-from amino import List, Empty, _, L, Maybe, Either, Left, Right
+from amino import List, Empty, _, L, Maybe, Either, Left, Right, Boolean, Just
 from amino.func import call_by_name, dispatch_with
+from amino.boolean import true, false
 
 
 def indent(strings):
@@ -31,6 +32,10 @@ class AstElem(abc.ABC):
     def endpos(self) -> int:
         ...
 
+    @abc.abstractproperty
+    def line(self) -> int:
+        ...
+
     @property
     def range(self):
         return self.pos, self.endpos
@@ -38,9 +43,10 @@ class AstElem(abc.ABC):
 
 class AstList(AstElem):
 
-    def __init__(self, data: List, rule: str) -> None:
+    def __init__(self, data: List, rule: str, line: int) -> None:
         self.data = data
         self._rule = rule
+        self._line = line
 
     @property
     def rule(self):
@@ -61,6 +67,10 @@ class AstList(AstElem):
     @property
     def endpos(self):
         return self.last.e / _.endpos | -1
+
+    @property
+    def line(self) -> int:
+        return self._line
 
     def lift(self, key):
         return self.data.lift(key).cata(
@@ -102,10 +112,11 @@ class AstList(AstElem):
 
 class AstToken(AstElem):
 
-    def __init__(self, raw, pos, rule, ws_count) -> None:
+    def __init__(self, raw, pos, line, rule, ws_count) -> None:
         self.raw = raw
         self._rule = rule
         self._pos = pos
+        self._line = line
         self.ws_count = ws_count
 
     @property
@@ -119,6 +130,10 @@ class AstToken(AstElem):
     @property
     def endpos(self):
         return self.pos + len(self.raw)
+
+    @property
+    def line(self) -> int:
+        return self._line
 
     def __str__(self):
         return self.raw
@@ -161,6 +176,10 @@ class AstMap(AstElem, AST):
     @property
     def endpos(self):
         return self.parseinfo.endpos
+
+    @property
+    def line(self) -> int:
+        return self.parseinfo.line
 
     def lift(self, key):
         msg = 'not present in AstMap({})'
@@ -241,6 +260,10 @@ class SubAst(abc.ABC):
     def e(self) -> Either[str, AstElem]:
         ...
 
+    @abc.abstractproperty
+    def line(self) -> Maybe[int]:
+        ...
+
     @property
     def _no_token(self):
         return 'ast is not a token'
@@ -250,6 +273,10 @@ class SubAst(abc.ABC):
         return (Right(self._data.raw)
                 if isinstance(self, SubAstToken) else
                 Left(self._no_token))
+
+    @abc.abstractproperty
+    def valid(self) -> Boolean:
+        ...
 
 
 class SubAstValid(Generic[A], SubAst):
@@ -265,8 +292,16 @@ class SubAstValid(Generic[A], SubAst):
         return self._data.rule
 
     @property
+    def line(self) -> Maybe[int]:
+        return Just(self._data.line)
+
+    @property
     def e(self):
         return Right(self._data)
+
+    @property
+    def valid(self) -> Boolean:
+        return true
 
 
 class SubAstMap(SubAstValid[AstMap]):
@@ -332,6 +367,10 @@ class SubAstInvalid(SubAst):
         return s.format(self.key, self.rule, self.reason)
 
     @property
+    def valid(self) -> Boolean:
+        return false
+
+    @property
     def _error(self):
         return 'no sub ast `{}` in `{}`: {}'.format(self.key, self.rule,
                                                     self.reason)
@@ -349,5 +388,9 @@ class SubAstInvalid(SubAst):
     @property
     def _no_token(self):
         return self._error
+
+    @property
+    def line(self) -> Maybe[int]:
+        return Empty()
 
 __all__ = ('SubAst', 'SubAstValid', 'SubAstInvalid', 'AstMap')

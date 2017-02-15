@@ -37,6 +37,7 @@ class AstSpec:
     range of a list $list_range
     positive closure $positive_closure
     pre-token whitespace $whitespace
+    line number attribute $lines
     '''
 
     def setup(self) -> None:
@@ -93,6 +94,15 @@ class AstSpec:
             (indent(3).must(contain(0))) &
             (indent(4).must(contain(0))) &
             (k(root.with_ws) == data)
+        )
+
+    def lines(self) -> Expectation:
+        data = '{tok(a)\ntok(b)}'
+        ast = self.ast(data, 'stats')
+        return (
+            k(ast.head.line).must(contain(0)) &
+            k(ast.tail.head.line).must(contain(1)) &
+            k(ast.tail[1].first.line).must(contain(1))
         )
 
 __all__ = ('AstSpec',)

@@ -18,3 +18,5 @@ ws = tk:tk ':' [args:args];
 
 # FIXME error
 list = tk ':' [pos];
+
+stats = lb:'{' head:call tail:{/\n/ call} rb:'}';

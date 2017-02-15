@@ -52,10 +52,11 @@ class PostProc:
                         'wrap_')
 
     def wrap_str(self, raw, parser, rule):
-        return AstToken(raw, parser._last_pos, rule, parser._take_ws())
+        return AstToken(raw, parser._last_pos, parser._line, rule,
+                        parser._take_ws())
 
     def wrap_list(self, raw, parser, rule):
-        return AstList(process_list(raw), rule)
+        return AstList(process_list(raw), rule, parser._line)
 
     def wrap_ast_list(self, ast, parser, rule):
         return ast
@@ -104,7 +105,10 @@ class DataSemantics(Logging):
         ws_count = (ast[0].ws_count
                     if isinstance(ast, list) else
                     ast.ws_count)
-        return AstToken(raw, pos, '', ws_count)
+        line = (ast[0].line
+                if isinstance(ast, list) else
+                ast.line)
+        return AstToken(raw, pos, line, '', ws_count)
 
     def _nospecial(self, name, ast):
         self.log.error('no handler for argument `{}` and {}'.format(name, ast))
@@ -147,6 +151,10 @@ class ParserExt(GrakoParser):
     @property
     def _last_pos(self):
         return self._pos_stack[-1]
+
+    @property
+    def _line(self) -> int:
+        return self._buffer.line
 
     def _take_ws(self):
         ws = self._last_ws

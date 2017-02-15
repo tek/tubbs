@@ -58,6 +58,10 @@ class Node(Logging, abc.ABC):
     def endpos(self):
         return self.data.endpos
 
+    @property
+    def line(self) -> int:
+        return self.data.line
+
     @abc.abstractproperty
     def pos_with_ws(self) -> int:
         ...
