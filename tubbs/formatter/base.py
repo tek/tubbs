@@ -253,8 +253,7 @@ class BreakerBase(Formatter):
     def break_inode(self, node: Inode, breaks: List[Break], pref: str
                     ) -> Task[List[Break]]:
         return (
-            self.handle(node, '{}_{{}}'.format(pref), breaks).task() /
-            breaks.add //
+            self.handle(node, '{}_{{}}'.format(pref), breaks).task() //
             L(self.sub_breaks)(node, _)
         )
 

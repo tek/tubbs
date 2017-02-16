@@ -3,6 +3,7 @@ from amino.util.string import snake_case
 
 from ribosome.util.callback import VimCallback
 from ribosome.nvim import NvimFacade
+from ribosome.nvim.components import NvimComponent
 
 from tubbs.formatter import base
 from tubbs.formatter.base import Formatter as FormatterBase, StrictBreakData
@@ -29,8 +30,12 @@ class Formatter(FormatterBase):
 
 class VimFormatter(Formatter):
 
-    def __init__(self, vim) -> None:
-        pass
+    def __init__(self, vim: NvimComponent) -> None:
+        self.vim = vim
+
+
+def nel(ast: AstElem) -> bool:
+    return isinstance(ast, AstList) and ast.data.length > 0
 
 
 class ScalaBreakRules(BreakRules):
@@ -42,10 +47,10 @@ class ScalaBreakRules(BreakRules):
         return 'casekw', 1.0, 0.0
 
     def map_param_clause(self, state: BreakState) -> BreakData:
-        return 'lpar', 0.89, 0.1
+        return 'lpar', 0.7, 0.1
 
     def map_implicit_param_clause(self, state: BreakState) -> BreakData:
-        return 'lpar', 0.9, 0.1
+        return 'lpar', 0.75, 0.1
 
     def map_block_body(self, state: BreakState) -> BreakData:
         return 'head', 0.9, 0.0
@@ -57,13 +62,12 @@ class ScalaBreakRules(BreakRules):
         return 'semi', 0.0, 1.1
 
     def token_lbrace(self, state: BreakState) -> BreakData:
-        def nonempty(ast: AstElem) -> bool:
-            return isinstance(ast, AstList) and ast.data.length > 0
-        multi = state.node.parent.parent.data.body.tail.e.exists(nonempty)
-        return 'lbrace', 0.0, (0.6 if multi else 0.3)
+        multi = state.node.parent.parent.data.body.tail.e.exists(nel)
+        return 'lbrace', 0.0, (1.0 if multi else 0.3)
 
     def token_rbrace(self, state: BreakState) -> BreakData:
-        return 'rbrace', 1.0, 0.0
+        multi = state.node.parent.parent.data.body.tail.e.exists(nel)
+        return 'rbrace', (1.0 if multi else 0.3), 0.0
 
     def map_assign(self, state: BreakState) -> BreakData:
         def decide(state: BreakState) -> StrictBreakData:
