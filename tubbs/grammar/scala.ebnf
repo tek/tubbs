@@ -157,7 +157,7 @@ stableId =
   | id
   ;
 thisRef = [id '.'] 'this';
-selectrest = dot:'.' id:id;
+selectrest = [nl:nl] dot:'.' id:id;
 select = head:stableId {tail:selectrest}+;
 path =
   | select
@@ -250,7 +250,7 @@ infixOper =
   | infixExpr
   | simpleExpr
   ;
-# NOTE expr seems to work for prefixExr for the right operand, check more
+# NOTE expr seems to work for prefixExpr for the right operand, check more
 infixExpr = left:infixOper method:id [nl:nl] right:expr;
 prefixExpr = prefix:prefixOperator expr:simpleExpr;
 simpleAssignExpr = id:id assign:assign rhs:expr;
@@ -361,8 +361,7 @@ catchExpr = 'catch' [nl] caseBlock;
 finallyExpr = 'finally' expr;
 tryExpr = 'try' [nl] (statBlock | expr) [[nl] catchExpr] [[nl] finallyExpr];
 doExpr = 'do' expr [eol] 'while' '(' expr ')';
-forExpr = 'for' ('(' enumerators ')' | '{' enumerators '}') {nl} ['yield']
-expr;
+forExpr = 'for' ('(' enumerators ')' | '{' enumerators '}') {nl} ['yield'] expr;
 throwExpr = 'throw' expr;
 returnExpr = 'return' [expr];
 controlExpr =

@@ -111,6 +111,15 @@ case_unapply = '''{
 case A(a, _) => b
 }'''
 
+multiline_expr = '''b
+  .map(fun)
+'''
+
+multiline_val = '''val a =
+  b
+    .map(fun)
+'''
+
 
 class ScalaSpecBase(Logging):
 
@@ -137,6 +146,9 @@ class ScalaSpecBase(Logging):
 
     def tpe(self, text: str, target: str) -> AstMap:
         return self.ast(text, 'type', target)
+
+    def def_(self, text: str, target: str) -> AstMap:
+        return self.ast(text, 'def', target)
 
 
 class ScalaSpec(ScalaSpecBase):
@@ -209,6 +221,8 @@ class ScalaSpec(ScalaSpecBase):
     token position $token_position
     infix type operator position $infix_position
     position inside case clause $case_clause_position
+    multiline expression with newline before method call $multiline_expr
+    multiline valdef with newline before method call $multiline_val
     '''
 
     def keyword(self) -> Expectation:
@@ -554,9 +568,16 @@ class ScalaSpec(ScalaSpecBase):
         return k(ast.tail.head.infix._data.pos) == 2
 
     def case_clause_position(self) -> Expectation:
-        ast = self.ast('val x = a match { case a: A => b case c => d }',
-                       'templateStat')
+        ast = self.ast('val x = a match { case a: A => b case c => d }', 'templateStat')
         return k(ast.def_.def_.rhs.cases.head.rhs._data.pos) == 31
+
+    def multiline_expr(self) -> None:
+        ast = self.expr(multiline_expr, 'applyExpr')
+        return k(ast.head.args.head.args.head.raw).must(be_right('fun'))
+
+    def multiline_val(self) -> None:
+        ast = self.def_(multiline_val, 'valVarDef')
+        return k(ast.def_.rhs.head.args.head.args.head.raw).must(be_right('fun'))
 
 stat = '''\
 '''
