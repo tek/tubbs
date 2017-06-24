@@ -231,7 +231,7 @@ class ScalaSpec(ScalaSpecBase):
     def special_char_id(self) -> Expectation:
         lam = self.ast('λ', 'id')
         arr = self.ast('→', 'op')
-        return (k(lam.raw) == equal('λ')) & (k(arr.raw) == '→')
+        return (k(lam.raw) == 'λ') & (k(arr.raw) == '→')
 
     def plainid_ws(self) -> Expectation:
         result = self.parse('case _', 'plainidName')
