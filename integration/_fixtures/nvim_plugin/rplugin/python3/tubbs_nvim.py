@@ -13,8 +13,8 @@ import amino.logging
 
 logfile = Path(os.environ['TRYPNV_LOG_FILE'])
 amino.logging.tryp_file_logging(level=logging.DEBUG,
-                               handler_level=logging.DEBUG,
-                               logfile=logfile)
+                                handler_level=logging.DEBUG,
+                                logfile=logfile)
 
 
 @neovim.plugin

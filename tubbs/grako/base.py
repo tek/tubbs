@@ -1,7 +1,7 @@
 import hashlib
 import abc
 
-from grako import gencode
+from grako.tool import gencode
 
 from amino import Either, Try, Map, L, Path, _, Right
 from amino.util.string import camelcaseify
