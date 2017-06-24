@@ -318,7 +318,7 @@ applyExprPre =
   | simpleExprPre
   ;
 applyExpr1 = pre:applyExprPre args:{argumentsExpr}+;
-applyExprChain = {dot:'.' id:id}+ args:{argumentsExpr};
+applyExprChain = [nl:nl] {dot:'.' id:id}+ args:{argumentsExpr};
 applyExpr = head:applyExpr1 tail:{applyExprChain};
 simpleExpr1 =
   | literal

@@ -113,12 +113,17 @@ case A(a, _) => b
 
 multiline_expr = '''b
   .map(fun)
+  .map(fun2)
 '''
 
 multiline_val = '''val a =
   b
     .map(fun)
 '''
+
+caseclause_arg = '''val a = b
+.map(fun)
+.collect { case c => d }'''
 
 
 class ScalaSpecBase(Logging):
@@ -223,6 +228,7 @@ class ScalaSpec(ScalaSpecBase):
     position inside case clause $case_clause_position
     multiline expression with newline before method call $multiline_expr
     multiline valdef with newline before method call $multiline_val
+    case clauses as argument to a method call $caseclause_arg
     '''
 
     def keyword(self) -> Expectation:
@@ -571,13 +577,17 @@ class ScalaSpec(ScalaSpecBase):
         ast = self.ast('val x = a match { case a: A => b case c => d }', 'templateStat')
         return k(ast.def_.def_.rhs.cases.head.rhs._data.pos) == 31
 
-    def multiline_expr(self) -> None:
+    def multiline_expr(self) -> Expectation:
         ast = self.expr(multiline_expr, 'applyExpr')
-        return k(ast.head.args.head.args.head.raw).must(be_right('fun'))
+        return k(ast.tail.head.args.head.args.head.raw).must(be_right('fun2'))
 
-    def multiline_val(self) -> None:
+    def multiline_val(self) -> Expectation:
         ast = self.def_(multiline_val, 'valVarDef')
         return k(ast.def_.rhs.head.args.head.args.head.raw).must(be_right('fun'))
+
+    def caseclause_arg(self) -> Expectation:
+        ast = self.def_(caseclause_arg, 'valVarDef')
+        return k(ast.def_.rhs.tail.head.args.head.body.head.rhs.raw).must(be_right('d'))
 
 stat = '''\
 '''
