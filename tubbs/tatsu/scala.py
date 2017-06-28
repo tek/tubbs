@@ -1,4 +1,4 @@
-from tubbs.grako.base import BuiltinParser
+from tubbs.tatsu.base import BuiltinParser
 
 from amino import Map
 

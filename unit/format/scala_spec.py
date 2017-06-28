@@ -10,10 +10,10 @@ from kallikrein.matchers.length import have_length
 from amino import _, List, __
 from amino.list import Lists
 
-from tubbs.grako.scala import Parser
+from tubbs.tatsu.scala import Parser
 from tubbs.formatter.tree import Tree, ListNode, Node
 from tubbs.formatter.scala import Breaker, Indenter
-from tubbs.grako.ast import AstMap
+from tubbs.tatsu.ast import AstMap
 
 fun = '''def fun[A, B, C](p1: Type1, p2: Type2)\
 (implicit p3: A :: B, p4: Type4) = {\

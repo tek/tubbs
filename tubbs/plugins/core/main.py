@@ -12,7 +12,7 @@ from tubbs.state import TubbsComponent, TubbsTransitions
 from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
                                         FormatRange, FormatAt, FormatExpr)
 from tubbs.plugins.core.crawler import Crawler, Match
-from tubbs.grako.base import ParserBase
+from tubbs.tatsu.base import ParserBase
 from tubbs.formatter.facade import FormattingFacade, Formatted, Range
 from tubbs.formatter.base import Formatter
 from tubbs.hints.base import HintsBase

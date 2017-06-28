@@ -1,10 +1,10 @@
 from functools import namedtuple
 from typing import Any
 
-from grako.exceptions import FailedKeywordSemantics, FailedPattern
-from grako.parsing import Parser as GrakoParser
-from grako.ast import AST
-from grako.contexts import Closure, graken
+from tatsu.exceptions import FailedKeywordSemantics, FailedPattern
+from tatsu.parsing import Parser as TatsuParser
+from tatsu.ast import AST
+from tatsu.contexts import closure, tatsumasu
 
 import regex
 
@@ -16,7 +16,7 @@ from amino.list import flatten
 
 from tubbs.logging import Logging
 from tubbs.formatter.tree import flatten_list
-from tubbs.grako.ast import AstMap, AstToken, AstList, AstElem
+from tubbs.tatsu.ast import AstMap, AstToken, AstList, AstElem
 
 
 def check_list(l, rule):
@@ -46,10 +46,7 @@ class PostProc:
 
     @lazy
     def wrap_data(self):
-        return dispatch(self,
-                        [str, list, AstList, AstMap, AstToken, Closure,
-                         type(None)],
-                        'wrap_')
+        return dispatch(self, [str, list, AstList, AstMap, AstToken, closure, type(None)], 'wrap_')
 
     def wrap_str(self, raw, parser, rule):
         return AstToken(raw, parser._last_pos, parser._line, rule,
@@ -126,7 +123,7 @@ class DataSemantics(Logging):
             self.made_token = False
 
 
-class ParserExt(GrakoParser):
+class ParserExt(TatsuParser):
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
@@ -161,9 +158,9 @@ class ParserExt(GrakoParser):
         self._last_ws = 0
         return ws
 
-    def _next_token(self):
+    def _next_token(self, ruleinfo=None):
         pre_pos = self._pos
-        super()._next_token()
+        super()._next_token(ruleinfo)
         pos = self._pos
         self._pos_stack.pop()
         self._pos_stack.append(pos)
@@ -171,13 +168,14 @@ class ParserExt(GrakoParser):
         if ws > 0:
             self._last_ws = ws
 
-    def _call(self, rule, name, params, kwparams):
+    # def _call(self, rule, name, params, kwparams):
+    def _call(self, info):
         try:
             self._pos_stack.append(self._pos)
-            result = GrakoParser._call(self, rule, name, params, kwparams)
-            wrapped = self._wrap_data(result, name)
+            result = TatsuParser._call(self, info)
+            wrapped = self._wrap_data(result, info.name)
             if amino.development and isinstance(wrapped, list):
-                check_list(wrapped, name)
+                check_list(wrapped, info.name)
             self._last_result = wrapped
             return wrapped
         finally:
@@ -216,7 +214,7 @@ class ParserExt(GrakoParser):
     def _unicode_category(self, pat: str) -> str:
         def err(p: str) -> None:
             self._trace_match('', p, failed=True)
-            self._error(p, etype=FailedPattern)
+            self._error(p, exclass=FailedPattern)
         token = self._buffer.matchre('.')
         if token is None:
             err('.')
@@ -230,19 +228,19 @@ class ParserExt(GrakoParser):
                 self._last_node = token
                 return token
 
-    @graken()
+    @tatsumasu()
     def _UnicodeUpper_(self) -> str:
         return self._unicode_category('\p{Lu}')
 
-    @graken()
+    @tatsumasu()
     def _UnicodeLower_(self) -> str:
         return self._unicode_category('\p{Ll}')
 
-    @graken()
+    @tatsumasu()
     def _UnicodeLetterMisc_(self) -> str:
         return self._unicode_category('\p{Lo}|\p{Lt}|\p{Nl}')
 
-    @graken()
+    @tatsumasu()
     def _UnicodeOpchar_(self) -> str:
         return self._unicode_category('\p{Sm}|\p{So}')
 

@@ -1,4 +1,4 @@
-from tubbs.grako.scala import Parser
+from tubbs.tatsu.scala import Parser
 from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints

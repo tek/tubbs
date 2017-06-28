@@ -1,9 +1,9 @@
 from ribosome.record import Record, field, str_field
 
-from tubbs.grako.base import ParserBase
+from tubbs.tatsu.base import ParserBase
 from tubbs.hints.base import HintsBase, HintMatch
 from tubbs.logging import Logging
-from tubbs.grako.ast import AstMap
+from tubbs.tatsu.ast import AstMap
 
 from amino import Maybe, __, L, _, List, Map, Either
 from amino.regex import Match

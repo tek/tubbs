@@ -1,14 +1,14 @@
 import hashlib
 import abc
 
-from grako.tool import gencode
+from tatsu.tool import gencode
 
 from amino import Either, Try, Map, L, Path, _, Right
 from amino.util.string import camelcaseify
 
 from ribosome.record import Record, map_field
 
-from tubbs.grako.parser_ext import ParserExt, DataSemantics
+from tubbs.tatsu.parser_ext import ParserExt, DataSemantics
 from tubbs.logging import Logging
 
 
@@ -53,7 +53,8 @@ class ParserBase(Logging, abc.ABC):
     @property
     def parser_args(self):
         return Map(
-            # trace=True
+            left_recursion=False,
+            # trace=True,
         )
 
     @property
@@ -129,7 +130,7 @@ class Parsers(Record):
 
     @property
     def _builtin_mod(self):
-        return 'tubbs.grako'
+        return 'tubbs.tatsu'
 
     def load(self, name):
         return Right(self) if name in self.parsers else self._load(name)

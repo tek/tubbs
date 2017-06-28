@@ -7,9 +7,9 @@ from kallikrein.matchers import contain
 from kallikrein.expectable import Expectable
 from amino import _, Either, Path
 
-from tubbs.grako.base import BuiltinParser
+from tubbs.tatsu.base import BuiltinParser
 from tubbs.formatter.tree import Tree
-from tubbs.grako.ast import AstElem
+from tubbs.tatsu.ast import AstElem
 
 
 class Parser(BuiltinParser):

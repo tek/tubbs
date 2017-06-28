@@ -8,7 +8,7 @@ from ribosome.nvim.components import NvimComponent
 from tubbs.formatter import base
 from tubbs.formatter.base import Formatter as FormatterBase, StrictBreakData
 from tubbs.formatter.base import BreakRules, IndentRules, BreakData, BreakState
-from tubbs.grako.ast import AstMap, AstElem, AstList
+from tubbs.tatsu.ast import AstMap, AstElem, AstList
 from tubbs.formatter.tree import Tree, Node
 
 

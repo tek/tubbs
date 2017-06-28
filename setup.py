@@ -17,7 +17,7 @@ setup(
     install_requires=[
         'ribosome>=10.0.3',
         'hues',
-        'grako',
+        'tatsu',
         'regex',
     ],
     tests_require=[

@@ -232,9 +232,7 @@ ascription = ':' infixType
   | ':' annotation {annotation}
   | ':' wildcard '*';
 
-patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:lbrace
-cases:caseClauses rbrace:rbrace;
-
+patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:lbrace cases:caseClauses rbrace:rbrace;
 
 bindings = '(' [binding {',' binding}] ')';
 binding = (id | wildcard) [':' type];
@@ -447,8 +445,7 @@ caseClauseRhs =
   | caseBlockBody
   | expr
   ;
-caseClause = casekw:case [nl1:nl] pat:pattern [[nl2:nl] guard:guard] [nl3:nl]
-arr:arrow [rhs:caseClauseRhs];
+caseClause = casekw:case [nl1:nl] pat:pattern [[nl2:nl] guard:guard] [nl3:nl] arr:arrow [rhs:caseClauseRhs];
 caseClausesRest = [eol:eol] case:caseClause;
 caseClauses = head:caseClause tail:{caseClausesRest};
 

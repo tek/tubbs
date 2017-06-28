@@ -42,7 +42,7 @@ set formatexpr=TubFormat(v:lnum,\ v:count)
 
 # EBNF
 
-**tubbs** uses [grako] to load grammars and parse code. Grammar files can be
+**tubbs** uses [tatsu] to load grammars and parse code. Grammar files can be
 specified with:
 
 > TODO
@@ -69,5 +69,5 @@ obtained from the hinting match.
 
 [ribosome]: https://github.com/tek/ribosome
 [tubbs.nvim]: https://github.com/tek/tubbs.nvim
-[grako]: https://bitbucket.org/apalala/grako
+[tatsu]: https://github.com/neogeny/TatSu
 [callback]: https://github.com/tek/ribosome#callbacks

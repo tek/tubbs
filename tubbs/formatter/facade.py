@@ -5,7 +5,7 @@ from amino import List, Either, L, _, Maybe
 from tubbs.logging import Logging
 from tubbs.formatter.tree import Tree
 from tubbs.formatter.base import Formatter
-from tubbs.grako.base import ParserBase
+from tubbs.tatsu.base import ParserBase
 from tubbs.hints.base import HintsBase
 from tubbs.plugins.core.crawler import Crawler
 

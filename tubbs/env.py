@@ -4,7 +4,7 @@ from ribosome.record import dfield
 from amino import __
 
 from tubbs.logging import Logging
-from tubbs.grako.base import Parsers
+from tubbs.tatsu.base import Parsers
 
 
 class Env(Data, Logging):

@@ -7,8 +7,8 @@ from kallikrein.expectation import Expectation
 from kallikrein.matchers.either import be_left, be_right
 from kallikrein.matchers.length import have_length
 
-from tubbs.grako.scala import Parser
-from tubbs.grako.ast import AstMap
+from tubbs.tatsu.scala import Parser
+from tubbs.tatsu.ast import AstMap
 from tubbs.logging import Logging
 
 funname = List.random_alpha(5)

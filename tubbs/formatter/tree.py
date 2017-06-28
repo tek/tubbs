@@ -9,7 +9,7 @@ from amino.list import flatten
 from amino.func import is_not_none
 
 from tubbs.logging import Logging
-from tubbs.grako.ast import AstList, AstElem, AstToken, AstMap
+from tubbs.tatsu.ast import AstList, AstElem, AstToken, AstMap
 
 
 def indent(strings):

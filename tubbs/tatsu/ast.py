@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Union, TypeVar, Generic, Dict
 
-from grako.ast import AST
+from tatsu.ast import AST
 
 from hues import huestr
 
