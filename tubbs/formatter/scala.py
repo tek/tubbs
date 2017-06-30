@@ -1,30 +1,33 @@
-from amino import Left
+from amino import Left, Either, List
 from amino.util.string import snake_case
+
+from stevedore.example.base import FormatterBase
 
 from ribosome.util.callback import VimCallback
 from ribosome.nvim import NvimFacade
 from ribosome.nvim.components import NvimComponent
 
-from tubbs.formatter import base
-from tubbs.formatter.base import Formatter as FormatterBase, StrictBreakData
-from tubbs.formatter.base import BreakRules, IndentRules, BreakData, BreakState
+from tubbs.formatter.breaker import Breaker as BreakerBase
+from tubbs.formatter.indenter import Indenter as IndenterBase
 from tubbs.tatsu.ast import AstMap, AstElem, AstList
-from tubbs.formatter.tree import Tree, Node
+from tubbs.formatter.tree import Tree, BiNode
+from tubbs.formatter.breaker import StrictBreakData, BreakRules, BreakData, BreakState
+from tubbs.formatter.indenter import IndentRules
 
 
 class Formatter(FormatterBase):
 
-    def no_rule(self, tree):
+    def no_rule(self, tree: Tree) -> Either[str, List[str]]:
         return Left('cannot format rule `{}`'.format(tree.info.rule))
 
-    def _format_rule(self, ast: AstMap):
+    def _format_rule(self, ast: AstMap) -> Either[str, List[str]]:
         handler = getattr(self, snake_case(ast.rule), self.no_rule)
         return handler(ast)
 
-    def format(self, ast: Tree):
+    def format(self, ast: Tree) -> Either[str, List[str]]:
         return self._format_rule(ast.root)
 
-    def template_stat(self, ast):
+    def template_stat(self, ast: Tree) -> Either[str, List[str]]:
         return Left('NI')
 
 
@@ -36,6 +39,10 @@ class VimFormatter(Formatter):
 
 def nel(ast: AstElem) -> bool:
     return isinstance(ast, AstList) and ast.data.length > 0
+
+
+def in_multi_line_block(node: BiNode) -> bool:
+    return node.parent.parent.data.body.tail.e.exists(nel)
 
 
 class ScalaBreakRules(BreakRules):
@@ -62,12 +69,15 @@ class ScalaBreakRules(BreakRules):
         return 'semi', 0.0, 1.1
 
     def token_lbrace(self, state: BreakState) -> BreakData:
-        multi = state.node.parent.parent.data.body.tail.e.exists(nel)
-        return 'lbrace', 0.0, (1.0 if multi else 0.3)
+        return 'lbrace', 0.0, (1.0 if in_multi_line_block(state.node) else 0.3)
 
     def token_rbrace(self, state: BreakState) -> BreakData:
-        multi = state.node.parent.parent.data.body.tail.e.exists(nel)
-        return 'rbrace', (1.0 if multi else 0.3), 0.0
+        def decide(state: BreakState) -> StrictBreakData:
+            opening_brace = state.node.parent.parent.data.lbrace.brace.e
+            opening_break = state.parent_breaks.find(lambda a: opening_brace.contains(a.node.data))
+            force_break = opening_break.present or in_multi_line_block(state.node)
+            return 'rbrace', (1.0 if force_break else 0.3), 0.0
+        return decide
 
     def map_assign(self, state: BreakState) -> BreakData:
         def decide(state: BreakState) -> StrictBreakData:
@@ -84,7 +94,7 @@ class ScalaBreakRules(BreakRules):
         return decide
 
 
-class Breaker(base.Breaker):
+class Breaker(BreakerBase):
 
     def __init__(self, textwidth: int) -> None:
         super().__init__(ScalaBreakRules(), textwidth)
@@ -99,27 +109,32 @@ class VimBreaker(Breaker, VimCallback):
 
 class ScalaIndentRules(IndentRules):
 
-    def case_clauses(self, node: Node) -> int:
+    def case_clauses(self, node: BiNode) -> int:
         return 1
 
-    def block_body(self, node: Node) -> int:
+    def block_body(self, node: BiNode) -> int:
         return 1
 
-    def rbrace(self, node: Node) -> int:
+    def rbrace(self, node: BiNode) -> int:
         return -1
 
+    def rhs(self, node: BiNode) -> int:
+        return 1
 
-class Indenter(base.Indenter):
+    def dot(self, node: BiNode) -> int:
+        return 0 if node.parent.rule == "applyExprChain" else 1
 
-    def __init__(self, shiftwidth) -> None:
+
+class Indenter(IndenterBase):
+
+    def __init__(self, shiftwidth: int) -> None:
         super().__init__(ScalaIndentRules(), shiftwidth)
 
 
 class VimIndenter(Indenter):
 
-    def __init__(self, vim) -> None:
+    def __init__(self, vim: NvimFacade) -> None:
         sw = vim.options('shiftwidth') | 2
         super().__init__(sw)
 
-__all__ = ('Formatter', 'Breaker', 'Indenter', 'VimFormatter', 'VimBreaker',
-           'VimIndenter')
+__all__ = ('Formatter', 'Breaker', 'Indenter', 'VimFormatter', 'VimBreaker', 'VimIndenter')

@@ -71,8 +71,7 @@ class StartMatch(Record):
 
 class Crawler(Logging):
 
-    def __init__(self, content: List[str], line: int, parser: ParserBase,
-                 hints: Maybe[HintsBase]) -> None:
+    def __init__(self, content: List[str], line: int, parser: ParserBase, hints: Maybe[HintsBase]) -> None:
         self.content = content
         self.line = line
         self.parser = parser
@@ -110,8 +109,7 @@ class Crawler(Logging):
         def match_rule(rule: str) -> Either:
             return (
                 self.parser.parse(text, rule) /
-                L(StartMatch.from_attr('ast'))(_, rule=rule, ident=ident,
-                                               hint=match)
+                L(StartMatch.from_attr('ast'))(_, rule=rule, ident=ident, hint=match)
             )
         return (
             match.rules

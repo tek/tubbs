@@ -2,18 +2,22 @@ from tubbs.tatsu.scala import Parser
 from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
-from tubbs.formatter.base import DictBreaker, DictIndenter, Formatter
+from tubbs.formatter.base import Formatter
+from tubbs.formatter.tree import bi_node
+from tubbs.formatter.breaker import DictBreaker
+from tubbs.formatter.indenter import DictIndenter
 
 from kallikrein.expectation import Expectation
 from kallikrein import k
 from kallikrein.matchers import contain
+import kallikrein.matchers.either  # NOQA
 
 from amino import List, Just, _, Map
 from amino.test.path import load_fixture
 from amino.list import Lists
 
 
-target = '''  def fun1[TPar1 <: UB1: TC1]
+def_target = '''  def fun1[TPar1 <: UB1: TC1]
   (par1a: Tpe1, par1b: Tpe1)
   (par2a: Tpe2, par2b: Tpe2)
   (implicit par3: Tpe3, par4: Tpe4) = {
@@ -30,17 +34,41 @@ target = '''  def fun1[TPar1 <: UB1: TC1]
   }'''
 
 
-class FormattingFacadeSpec:
-    ''' formatting facade
+val_target = '''\
+  val name =
+    value.attr
+      .map(fun1)
+      .collect { case Extract(v1, v2) => fun2(v2, v1) }
+      .flatMap {
+        case (x, y) =>
+          Option(x + y)
+      }
+      .zip'''
 
-    break a scala statement
-    with default rules $scala_default
-    with custom rules in a dict $scala_dict
+
+val_target2 = '''val x = a
+  .b { case aaaaaaaaaaaaaaaaaaa => b }
+'''
+
+
+class FormattingFacadeSpec:
+
+#     break a scala def
+#     with default rules $scala_def_default
+#     with custom rules in a dict $scala_def_dict
+
+#     break a scala val
+#     with default rules $scala_val_default
+
+    ''' formatting facade
+    map test $map_tree
     '''
 
     def setup(self) -> None:
-        content = load_fixture('format', 'scala', 'file1.scala')
-        self.lines = Lists.lines(content)
+        def_content = load_fixture('format', 'scala', 'file1.scala')
+        val_content = load_fixture('format', 'scala', 'file2.scala')
+        self.def_lines = Lists.lines(def_content)
+        self.val_lines = Lists.lines(val_content)
         self.parser = Parser()
         self.parser.gen()
 
@@ -56,15 +84,21 @@ class FormattingFacadeSpec:
     def default_facade(self) -> FormattingFacade:
         return self.facade(self.default_formatters)
 
-    def scala(self, formatters: List[Formatter]) -> Expectation:
+    def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
-        result = facade.format(self.lines, (9, 10)) / _.lines
+        result = facade.format(lines, (9, 10)) / _.lines
         return k(result).must(contain(Lists.lines(target)))
 
-    def scala_default(self) -> Expectation:
-        return self.scala(self.default_formatters)
+    def scala_def(self, formatters: List[Formatter]) -> Expectation:
+        return self.format_scala(formatters, self.def_lines, def_target)
 
-    def scala_dict(self) -> Expectation:
+    def scala_val(self, formatters: List[Formatter]) -> Expectation:
+        return self.format_scala(formatters, self.val_lines, val_target)
+
+    def scala_def_default(self) -> Expectation:
+        return self.scala_def(self.default_formatters)
+
+    def scala_def_dict(self) -> Expectation:
         breaks = Map(
             map_case_clause=('casekw', 1.0, 0.0),
             map_block_body=('head', 0.9, 0.0),
@@ -81,6 +115,35 @@ class FormattingFacadeSpec:
             rbrace=-1,
         )
         formatters = List(DictBreaker(breaks, 40), DictIndenter(indents, 2))
-        return self.scala(formatters)
+        return self.scala_def(formatters)
+
+    def scala_val_default(self) -> Expectation:
+        return self.scala_val(self.default_formatters)
+
+    def scala_val_default2(self) -> Expectation:
+        # facade = self.facade(self.default_formatters)
+        # result = facade.format(List.lines(val_target2), (0, 1)) / _.lines
+        return k(1) == 1
+
+    def map_tree(self) -> Expectation:
+        l = '''\
+val a =
+  foo
+    .map {
+      case a =>
+        a
+    }'''
+        ast = self.parser.parse(l, 'valVarDef').get_or_raise
+        ind = Indenter(2)
+        r = ind.format(ast)
+        print(r)
+        # b = bi_node('root', ast, ast)
+        # print(b)
+        # print(b.show)
+        # b1 = b.map(lambda a: (a, a.line))
+        # print(b1.show)
+        # print(ast.line_nodes)
+        # a1 = ast.filter()
+        return k(1) == 1
 
 __all__ = ('FormattingFacadeSpec',)

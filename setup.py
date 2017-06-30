@@ -15,6 +15,7 @@ setup(
     packages=find_packages(
         exclude=['unit', 'unit.*', 'integration', 'integration.*']),
     install_requires=[
+        'amino>=9.6.0',
         'ribosome>=10.0.3',
         'hues',
         'tatsu',

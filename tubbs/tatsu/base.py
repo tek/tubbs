@@ -1,5 +1,6 @@
 import hashlib
 import abc
+from typing import Any
 
 from tatsu.tool import gencode
 
@@ -10,6 +11,7 @@ from ribosome.record import Record, map_field
 
 from tubbs.tatsu.parser_ext import ParserExt, DataSemantics
 from tubbs.logging import Logging
+from tubbs.tatsu.ast import AstElem
 
 
 class ParserBase(Logging, abc.ABC):
@@ -31,42 +33,42 @@ class ParserBase(Logging, abc.ABC):
         ...
 
     @property
-    def camel_name(self):
+    def camel_name(self) -> str:
         return camelcaseify(self.name)
 
     @property
-    def parser_class(self):
+    def parser_class(self) -> str:
         return '{}Parser'.format(self.camel_name)
 
     @property
-    def base_dir(self):
+    def base_dir(self) -> Path:
         return Path(__file__).parent.parent
 
     @property
-    def chksums_path(self):
+    def chksums_path(self) -> Path:
         return self.base_dir / 'hashes'
 
     @property
-    def chksum_path(self):
+    def chksum_path(self) -> Path:
         return self.chksums_path / self.name
 
     @property
-    def parser_args(self):
+    def parser_args(self) -> Map[str, Any]:
         return Map(
             left_recursion=False,
             # trace=True,
         )
 
     @property
-    def grammar_chksum(self):
+    def grammar_chksum(self) -> bytes:
         return hashlib.sha384(self.grammar_file.read_bytes()).digest()
 
     @property
-    def checksum_invalid(self):
+    def checksum_invalid(self) -> bool:
         return (not self.chksum_path.is_file() or
                 self.chksum_path.read_bytes() != self.grammar_chksum)
 
-    def gen(self):
+    def gen(self) -> None:
         self.parser_path.parent.mkdir(parents=True, exist_ok=True)
         self.chksums_path.mkdir(parents=True, exist_ok=True)
         if not self.parser_path.is_file() or self.checksum_invalid:
@@ -78,18 +80,18 @@ class ParserBase(Logging, abc.ABC):
             self.chksum_path.write_bytes(self.grammar_chksum)
 
     @property
-    def parser(self):
-        def cons(tpe):
+    def parser(self) -> Either[str, ParserExt]:
+        def cons(tpe: type) -> Either[str, ParserExt]:
             cls = type(self.parser_class, (ParserExt, tpe), {})
             return Try(lambda *a, **kw: cls(*a, **kw), **self.parser_args)
         return Either.import_path(self.module_path) // cons
 
     @property
-    def semantics(self):
+    def semantics(self) -> DataSemantics:
         return DataSemantics()
 
-    def parse(self, text: str, rule: str):
-        def log_error(err):
+    def parse(self, text: str, rule: str) -> Either[str, AstElem]:
+        def log_error(err: str) -> None:
             self.log.debug(f'failed to parse `{rule}`:\n{err}')
         return (
             self.parser //
@@ -100,28 +102,27 @@ class ParserBase(Logging, abc.ABC):
 class BuiltinParser(ParserBase):
 
     @property
-    def module_base(self):
+    def module_base(self) -> str:
         return 'tubbs.parsers'
 
     @property
-    def module_path(self):
-        return '{}.{}.{}'.format(self.module_base, self.name,
-                                 self.parser_class)
+    def module_path(self) -> str:
+        return '{}.{}.{}'.format(self.module_base, self.name, self.parser_class)
 
     @property
-    def grammar_path(self):
+    def grammar_path(self) -> Path:
         return self.base_dir / 'grammar'
 
     @property
-    def grammar_file(self):
+    def grammar_file(self) -> Path:
         return self.grammar_path / '{}.ebnf'.format(self.name)
 
     @property
-    def parsers_path(self):
+    def parsers_path(self) -> Path:
         return self.base_dir / 'parsers'
 
     @property
-    def parser_path(self):
+    def parser_path(self) -> Path:
         return self.parsers_path / '{}.py'.format(self.name)
 
 
@@ -129,23 +130,25 @@ class Parsers(Record):
     parsers = map_field()
 
     @property
-    def _builtin_mod(self):
+    def _builtin_mod(self) -> str:
         return 'tubbs.tatsu'
 
-    def load(self, name):
+    def load(self, name: str) -> Either[str, 'Parsers']:
         return Right(self) if name in self.parsers else self._load(name)
 
-    def _load(self, name):
-        def update(parser):
-            return self.modder.parsers(_ + (name, parser()))
+    def _load(self, name: str) -> Either[str, 'Parsers']:
+        def update(parser_ctor: type) -> Parsers:
+            return self.modder.parsers(_ + (name, parser_ctor()))
         return (
-            Either.import_name('{}.{}'.format(
-                self._builtin_mod, name), 'Parser') /
+            Either.import_name('{}.{}'.format(self._builtin_mod, name), 'Parser') /
             update
         )
 
-    def parser(self, name):
-        return (self.parsers.lift(name)
-                .to_either('no parser for `{}`'.format(name)))
+    def parser(self, name: str) -> Either[str, ParserBase]:
+        return (
+            self.parsers
+            .lift(name)
+            .to_either('no parser for `{}`'.format(name))
+        )
 
 __all__ = ('ParserBase', 'BuiltinParser', 'Parsers')

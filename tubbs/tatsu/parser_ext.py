@@ -1,5 +1,5 @@
 from functools import namedtuple
-from typing import Any
+from typing import Any, Callable, Union, cast
 
 from tatsu.exceptions import FailedKeywordSemantics, FailedPattern
 from tatsu.parsing import Parser as TatsuParser
@@ -16,10 +16,13 @@ from amino.list import flatten
 
 from tubbs.logging import Logging
 from tubbs.formatter.tree import flatten_list
-from tubbs.tatsu.ast import AstMap, AstToken, AstList, AstElem
+from tubbs.tatsu.ast import AstMap, AstToken, AstList, AstElem, Line
 
 
-def check_list(l, rule):
+AstData = Union[str, list, AstList, AstMap, AstToken, closure, None]
+
+
+def check_list(l: Any, rule: str) -> None:
     for e in l:
         if type(e) is list:
             raise Exception('list {!r} in {!r} for `{}`'.format(e, l, rule))
@@ -29,45 +32,44 @@ def check_list(l, rule):
             check_list(e.v, rule)
 
 
-def process_list(data):
-    def flat(data):
+def process_list(data: Any) -> List:
+    def loop(data: Any) -> list:
         return (
-            flatten(map(flat, data))
+            flatten(map(loop, data))
             if isinstance(data, list) else
             [data]
         )
-    return List.wrap(flat(data))
+    return List.wrap(loop(data))
 
 
 class PostProc:
 
-    def __call__(self, ast, parser, rule):
+    def __call__(self, ast: AstData, parser: 'ParserExt', rule: str) -> Union[AstElem, None]:
         return self.wrap_data(ast, parser, rule)
 
     @lazy
-    def wrap_data(self):
+    def wrap_data(self) -> Callable:
         return dispatch(self, [str, list, AstList, AstMap, AstToken, closure, type(None)], 'wrap_')
 
-    def wrap_str(self, raw, parser, rule):
-        return AstToken(raw, parser._last_pos, parser._line, rule,
-                        parser._take_ws())
+    def wrap_str(self, raw: str, parser: 'ParserExt', rule: str) -> AstElem:
+        return AstToken(raw, parser._last_pos, parser._line, rule, parser._take_ws())
 
-    def wrap_list(self, raw, parser, rule):
+    def wrap_list(self, raw: list, parser: 'ParserExt', rule: str) -> AstElem:
         return AstList(process_list(raw), rule, parser._line)
 
-    def wrap_ast_list(self, ast, parser, rule):
+    def wrap_ast_list(self, ast: AstList, parser: 'ParserExt', rule: str) -> AstElem:
         return ast
 
-    def wrap_closure(self, raw, parser, rule):
+    def wrap_closure(self, raw: closure, parser: 'ParserExt', rule: str) -> AstElem:
         return self.wrap_list(raw, parser, rule)
 
-    def wrap_ast_map(self, ast, parser, rule):
+    def wrap_ast_map(self, ast: AstMap, parser: 'ParserExt', rule: str) -> AstElem:
         return ast
 
-    def wrap_ast_token(self, token, parser, rule):
+    def wrap_ast_token(self, token: AstToken, parser: 'ParserExt', rule: str) -> AstElem:
         return token
 
-    def wrap_none_type(self, n, parser, rule):
+    def wrap_none_type(self, n: None, parser: 'ParserExt', rule: str) -> None:
         pass
 
 
@@ -79,43 +81,42 @@ class DataSemantics(Logging):
     def __init__(self) -> None:
         self.made_token = False
 
-    def special(self, ast, name):
-        handler = getattr(self, 'special_{}'.format(name),
-                          L(self._nospecial)(name, _))
+    def special(self, ast: AstData, name: str) -> AstData:
+        handler = getattr(self, 'special_{}'.format(name), L(self._nospecial)(name, _))
         return handler(ast)
 
-    def special_token(self, ast: Any) -> AstToken:
+    def special_token(self, ast: AstData) -> AstToken:
         self.made_token = True
         return ast if isinstance(ast, AstToken) else self.flatten_token(ast)
 
-    def flatten_token(self, ast: Any) -> AstToken:
+    def flatten_token(self, ast: AstData) -> AstToken:
         raw = (flatten_list(ast) / _.raw).mk_string()
         pos = (
             ast[0].pos
             if isinstance(ast, list) else
-            ast.head.e / _.pos | -1
+            cast(AstList, ast).head.e / _.pos | -1
             if isinstance(ast, AstList) else
-            ast.pos
+            cast(AstToken, ast).pos
             if isinstance(ast, AstToken) else
             (-1)
         )
         ws_count = (ast[0].ws_count
                     if isinstance(ast, list) else
-                    ast.ws_count)
+                    cast(AstElem, ast).ws_count)
         line = (ast[0].line
                 if isinstance(ast, list) else
-                ast.line)
+                cast(AstElem, ast).line)
         return AstToken(raw, pos, line, '', ws_count)
 
-    def _nospecial(self, name, ast):
+    def _nospecial(self, name: str, ast: AstData) -> AstData:
         self.log.error('no handler for argument `{}` and {}'.format(name, ast))
         return ast
 
-    def _default(self, ast, *a, **kw):
+    def _default(self, ast: AstData, *a: Any, **kw: Any) -> AstData:
         ast1 = List.wrap(a).head / L(self.special)(ast, _) | ast
         return AstMap.from_ast(ast1) if isinstance(ast1, AST) else ast1
 
-    def _postproc(self, parser, data):
+    def _postproc(self, parser: 'ParserExt', data: AstElem) -> None:
         if self.made_token:
             data._rule = parser._last_rule
             if data._pos == -1:
@@ -125,40 +126,40 @@ class DataSemantics(Logging):
 
 class ParserExt(TatsuParser):
 
-    def __init__(self, **kw) -> None:
+    def __init__(self, **kw: Any) -> None:
         super().__init__(**kw)
         self._pos_stack = [0]  # type: list
         self._last_ws = 0
 
     @lazy
-    def post_proc(self):
+    def post_proc(self) -> PostProc:
         return PostProc()
 
-    def _wrap_data(self, node, name):
+    def _wrap_data(self, node: AstData, name: str) -> AstData:
         return self.post_proc(node, self, name)
 
     @property
-    def _last_rule(self):
-        return self._rule_stack[-1]
+    def _last_rule(self) -> str:
+        return self._rule_stack[-1] if len(self._rule_stack) >= 1 else 'none'
 
     @property
-    def _penultimate_rule(self):
+    def _penultimate_rule(self) -> str:
         return self._rule_stack[-2] if len(self._rule_stack) >= 2 else 'none'
 
     @property
-    def _last_pos(self):
-        return self._pos_stack[-1]
+    def _last_pos(self) -> int:
+        return self._pos_stack[-1] if len(self._rule_stack) >= 1 else -1
 
     @property
-    def _line(self) -> int:
-        return self._buffer.line
+    def _line(self) -> Line:
+        return Line.from_line_info(self._buffer.line_info(self._last_pos))
 
-    def _take_ws(self):
+    def _take_ws(self) -> int:
         ws = self._last_ws
         self._last_ws = 0
         return ws
 
-    def _next_token(self, ruleinfo=None):
+    def _next_token(self, ruleinfo: Any=None) -> None:
         pre_pos = self._pos
         super()._next_token(ruleinfo)
         pos = self._pos
@@ -168,8 +169,7 @@ class ParserExt(TatsuParser):
         if ws > 0:
             self._last_ws = ws
 
-    # def _call(self, rule, name, params, kwparams):
-    def _call(self, info):
+    def _call(self, info: Any) -> Any:
         try:
             self._pos_stack.append(self._pos)
             result = TatsuParser._call(self, info)
@@ -181,13 +181,13 @@ class ParserExt(TatsuParser):
         finally:
             self._pos_stack.pop()
 
-    def _add_cst_node(self, node):
+    def _add_cst_node(self, node: AstData) -> Any:
         wrapped = self._wrap_data(node, self._last_rule)
         return super()._add_cst_node(wrapped)
 
-    def name_last_node(self, name):
-        after_cst = lambda: (
-            isinstance(self.cst, AstToken) and self.cst.raw == self.last_node)
+    def name_last_node(self, name: str) -> None:
+        def after_cst() -> bool:
+            return isinstance(self.cst, AstToken) and self.cst.raw == self.last_node
         node = (self.last_node
                 if isinstance(self.last_node, AstElem) else
                 self.cst
@@ -204,7 +204,7 @@ class ParserExt(TatsuParser):
         else:
             self.ast[name] = node
 
-    def _check_name(self):
+    def _check_name(self) -> None:
         name = str(self._last_result)
         if self.ignorecase or self._buffer.ignorecase:
             name = name.upper()
@@ -218,13 +218,15 @@ class ParserExt(TatsuParser):
         token = self._buffer.matchre('.')
         if token is None:
             err('.')
+            return ''
         else:
             m = regex.match(pat, token)
             if m is None:
                 err(pat)
+                return ''
             else:
                 self._trace_match(token, pat)
-                self._add_cst_node(token)  # type: ignore
+                self._add_cst_node(token)
                 self._last_node = token
                 return token
 
