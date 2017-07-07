@@ -1,14 +1,15 @@
-from amino import List, _, Either
+from amino import List, Either, Boolean
 from amino.test.path import load_fixture
+from amino.tree import SubTree, SubTreeLeaf, SubTreeValid
 
 from kallikrein import k, unsafe_k, pending
-from kallikrein.matchers import contain, equal
 from kallikrein.expectation import Expectation
 from kallikrein.matchers.either import be_left, be_right
 from kallikrein.matchers.length import have_length
+from kallikrein.matcher import Predicate, matcher, NestingUnavailable
 
 from tubbs.tatsu.scala import Parser
-from tubbs.tatsu.ast import AstMap
+from tubbs.tatsu.ast import AstMap, AstElem, AstToken
 from tubbs.logging import Logging
 
 funname = List.random_alpha(5)
@@ -140,7 +141,7 @@ class ScalaSpecBase(Logging):
         unsafe_k(res).must(be_right)
         ast = res.value
         if target:
-            unsafe_k(ast.rule).must(equal(target))
+            unsafe_k(ast.rule) == target
         return res.value
 
     def expr(self, text: str, target: str) -> AstMap:
@@ -156,13 +157,65 @@ class ScalaSpecBase(Logging):
         return self.ast(text, 'def', target)
 
 
+class BeToken:
+    pass
+
+
+class PredBeToken(Predicate):
+    pass
+
+
+class PredBeTokenSubTree(PredBeToken, tpe=SubTree):
+
+    def check(self, exp: SubTree, target: str) -> Boolean:
+        return Boolean(isinstance(exp, SubTreeLeaf) and exp.data.raw == target)
+
+
+class PredBeTokenAstElem(PredBeToken, tpe=AstElem):
+
+    def check(self, exp: AstElem, target: str) -> Boolean:
+        return Boolean(isinstance(exp, AstToken) and exp.raw == target)
+
+
+success = '`{}` is token `{}`'
+failure = '`{}` is not token `{}`'
+be_token = matcher(BeToken, success, failure, PredBeToken, NestingUnavailable)
+
+
+class HaveRule:
+    pass
+
+
+class PredHaveRule(Predicate):
+    pass
+
+
+class PredHaveRuleSubTree(PredHaveRule, tpe=SubTree):
+
+    def check(self, exp: SubTree, target: str) -> Boolean:
+        return Boolean(isinstance(exp, SubTreeValid) and exp.data.rule == target)
+
+
+class PredHaveRuleAstElem(PredHaveRule, tpe=AstElem):
+
+    def check(self, exp: AstElem, target: str) -> Boolean:
+        print(exp)
+        return Boolean(exp.rule == target)
+
+
+success = '`{}` has rule `{}`'
+failure = '`{}` does not have rule `{}`'
+have_rule = matcher(HaveRule, success, failure, PredHaveRule, NestingUnavailable)
+
+
 class ScalaSpec(ScalaSpecBase):
     '''scala ebnf
     keyword $keyword
     special char id $special_char_id
     plain id should not eat whitespace $plainid_ws
-    applyExpr $apply
-    applyChain $apply_chain
+    function application $apply
+    chained function application $apply_chain
+    function application with type args $apply_typeargs
     apply string literal $apply_string_literal
     function definition $fundef
     incomplete function definition $incomplete_fundef
@@ -206,6 +259,7 @@ class ScalaSpec(ScalaSpecBase):
     assignment with complex rhs $assign_ext
     complex eta expansion expression $complex_eta
     chained function application $chained_apply
+    method with type args $id_type_args
     private final val modifiers $modifiers
     apply on an attribute with type arg $apply_attr_type_args
     misc apply assignments $apply_assign
@@ -237,7 +291,7 @@ class ScalaSpec(ScalaSpecBase):
     def special_char_id(self) -> Expectation:
         lam = self.ast('λ', 'id')
         arr = self.ast('→', 'op')
-        return (k(lam.raw) == 'λ') & (k(arr.raw) == '→')
+        return (k(lam).must(be_token('λ'))) & (k(arr).must(be_token('→')))
 
     def plainid_ws(self) -> Expectation:
         result = self.parse('case _', 'plainidName')
@@ -245,130 +299,131 @@ class ScalaSpec(ScalaSpecBase):
 
     def apply(self) -> Expectation:
         ast = self.expr('f(a)', 'applyExpr')
-        return k(ast.head.args.head.args.head.raw).must(contain('a'))
+        return k(ast.s.app.head.argss.head.args.head).must(be_token('a'))
 
     def apply_chain(self) -> Expectation:
         ast = self.expr('f.g(a)', 'applyExpr')
-        return (k(ast.head.pre.rule).must(equal('attrExpr')) &
-                k(ast.head.args.head.args.head.raw).must(contain('a')))
+        return k(ast.s.app.head.argss.head.args.head).must(be_token('a'))
+
+    def apply_typeargs(self) -> Expectation:
+        ast = self.expr('f.g.h[A, B](a)', 'applyExpr')
+        return k(ast.s.app.head.meths.last.meth.targs.types.tail.head.tpe).must(be_token('B'))
 
     def apply_string_literal(self) -> Expectation:
         word = List.random_alpha()
         ast = self.expr('foo("{}")'.format(word), 'applyExpr')
-        return k(ast.head.args.head.args.head.data.raw).must(contain(word))
+        return k(ast.s.app.head.argss.head.args.head['data']).must(be_token(word))
 
     def fundef(self) -> Expectation:
         ast = self.stat(fundef, 'templateStatDef')
-        sig = ast.def_.def_.sig
+        sig = ast.s.def_.def_.sig
         explicit = sig.paramss.explicit
         id = explicit.last.params.last.tpe
         return (
-            k(sig.id.raw).must(contain(funname)) &
-            k(explicit.e / _.rule).must(contain('paramClauses')) &
-            k(id.raw).must(contain(tpe3)) &
-            k(id.e / _.rule).must(contain('plainid'))
+            k(sig.id).must(be_token(funname)) &
+            k(explicit).must(have_rule('paramClauses')) &
+            k(id).must(be_token(tpe3)) &
+            k(id).must(have_rule('plainid'))
         )
 
     def incomplete_fundef(self) -> Expectation:
         ast = self.ast(incomplete_fundef, 'templateStat')
-        return k(ast.dcl.dcl.sig.id.raw).must(contain(funname))
+        return k(ast.s.dcl.dcl.sig.id).must(be_token(funname))
 
     def fundecl(self) -> Expectation:
         ast = self.ast(fundecl, 'templateStat')
         return (
             k(self.parse(fundecl, 'funDef')).must(be_left) &
-            k(ast.mod.raw).must(contain(acc_mod)) &
-            k(ast.dcl.dcl.sig.id.raw).must(contain(funname))
+            k(ast.s.mod).must(be_token(acc_mod)) &
+            k(ast.s.dcl.dcl.sig.id).must(be_token(funname))
         )
 
     def funsig(self) -> Expectation:
         ast = self.ast(funsig, 'funSig')
-        return k(ast.id.raw).must(contain(funname))
+        return k(ast.s.id).must(be_token(funname))
 
     def rettype(self) -> Expectation:
         ast = self.ast(rettype, 'type')
-        return k(ast.simple.raw).must(contain(rettypeid))
+        return k(ast.s.simple).must(be_token(rettypeid))
 
     def typeargs(self) -> Expectation:
         ast = self.ast(typeargs, 'typeArgs')
-        return k(ast.types.head.raw).must(contain('A'))
-        return k(ast.types.last.last.id).must(contain('Tpe6'))
+        return k(ast.s.types.head).must(be_token('A'))
+        return k(ast.s.types.last.last.id).must(be_token('Tpe6'))
 
     def pattern(self) -> Expectation:
         ast = self.ast('a: Type', 'pattern')
-        return k(ast.head.last.last.raw).must(contain('Type'))
+        return k(ast.s.head.last.last).must(be_token('Type'))
 
     def caseclause(self) -> Expectation:
         ast = self.ast(caseclause, 'caseClause')
-        return k(ast.rhs.raw).must(contain('1'))
+        return k(ast.s.rhs).must(be_token('1'))
 
     def caseclause_wildcard(self) -> Expectation:
         ast = self.ast(caseclause_wildcard, 'caseClause')
-        return k(ast.rhs.raw).must(contain('3'))
+        return k(ast.s.rhs).must(be_token('3'))
 
     def caseclause_guard(self) -> Expectation:
         ast = self.ast('case c if b => a', 'caseClause')
-        return k(ast.guard.expr.raw).must(contain('b'))
+        return k(ast.s.guard.expr).must(be_token('b'))
 
     def caseclauses(self) -> Expectation:
         ast = self.ast(caseclauses, 'caseClauses')
         return (
-            k(ast.head.rhs.head.raw).must(contain('1')) &
-            k(ast.tail.head.case.rhs.raw).must(contain('3'))
+            k(ast.s.head.rhs.head).must(be_token('1')) &
+            k(ast.s.tail.head.case.rhs).must(be_token('3'))
         )
 
     def patmat(self) -> Expectation:
         ast = self.ast(patmat, 'patMat')
         return (
-            k(ast.cases.tail.head.case.pat.head.raw).must(contain('_')) &
-            k(ast.cases.tail.head.case.rhs.head.raw).must(contain('3'))
+            k(ast.s.cases.tail.head.case.pat.head).must(be_token('_')) &
+            k(ast.s.cases.tail.head.case.rhs.head).must(be_token('3'))
         )
 
     def patmat_assign(self) -> Expectation:
         ast = self.ast(patmat_assign, 'patVarDef')
-        cases = ast.def_.rhs.cases
+        cases = ast.s.def_.rhs.cases
         case1 = cases.head
         case2 = cases.tail.head.case
         return (
-            k(case1.pat.head.last.last.raw).must(contain('Type')) &
-            k(case2.rhs.head.raw).must(be_right(contain('3')))
+            k(case1.pat.head.last.last).must(be_token('Type')) &
+            k(case2.rhs.head).must(be_token('3'))
         )
 
     def result_type(self) -> Expectation:
         ast = self.ast(resulttype, 'def')
-        return (k(ast.def_.rhs.body.tail.head.stat.templ.head.head.raw)
-                .must(contain('Cls')))
+        return (k(ast.s.def_.rhs.body.tail.head.stat.templ.head.head)
+                .must(be_token('Cls')))
 
     def val_var_def(self) -> Expectation:
         ast = self.stat(val_var_def, 'templateStatDef')
-        return k(ast.def_.def_.rhs.raw).must(contain('1'))
+        return k(ast.s.def_.def_.rhs).must(be_token('1'))
 
     def block_body(self) -> Expectation:
         ast = self.ast(block, 'blockBody')
-        return k(ast.head.def_.def_.rhs.raw).must(contain('1'))
+        return k(ast.s.head.def_.def_.rhs).must(be_token('1'))
 
     def block_expr(self) -> Expectation:
         ast = self.ast(blockExpr, 'block')
-        return k(ast.body.head.def_.def_.rhs.raw).must(contain('1'))
+        return k(ast.s.body.head.def_.def_.rhs).must(be_token('1'))
 
     def infix(self) -> Expectation:
         ast = self.ast('foo boo\n zoo', 'infixExpr')
-        return k(ast.right.raw).must(contain('zoo'))
+        return k(ast.s.right).must(be_token('zoo'))
 
     def whitespace(self) -> Expectation:
         i = 3
         ast = self.ast('{}def foo = 1'.format(' ' * i), 'def')
-        return k(ast.defkw._data.ws_count).must(equal(i))
+        return k(ast.s.defkw.data.ws_count) == i
 
     def broken(self) -> Expectation:
         ast = self.ast(broken_lines, 'def')
-        return (k(ast.def_.rhs.body.head.def_.def_.rhs.head.pre.raw)
-                .must(contain('fun2')))
+        return k(ast.s.def_.rhs.body.head.def_.def_.rhs.pre).must(be_token('fun2'))
 
     def broken2(self) -> Expectation:
         ast = self.ast(broken_lines_2, 'def')
-        return (k(ast.def_.rhs.body.head.def_.def_.rhs.head.pre.raw)
-                .must(contain('fun2')))
+        return k(ast.s.def_.rhs.body.head.def_.def_.rhs.pre).must(be_token('fun2'))
 
     def trait(self) -> Expectation:
         ast = self.ast('trait Foo {\n}', 'trait')
@@ -376,218 +431,216 @@ class ScalaSpec(ScalaSpecBase):
 
     def argument_assign(self) -> Expectation:
         ast = self.ast(argument_assign, 'templateBody')
-        rhs = ast.stats.head.body.head.def_.def_.rhs
-        return k(rhs.head.args.head.args.head.rhs.raw).must(contain('true'))
+        rhs = ast.s.stats.head.body.head.def_.def_.rhs
+        return k(rhs.app.head.argss.head.args.head.rhs).must(be_token('true'))
 
     def select(self) -> Expectation:
         ast = self.ast('a.b.c', 'path')
-        return k(ast.tail.last.id.raw).must(contain('c'))
+        return k(ast.s.tail.last.id).must(be_token('c'))
 
     def argument_select(self) -> Expectation:
         ast = self.ast(argument_select, 'templateBody')
-        rhs = ast.stats.head.body.head.def_.def_.rhs
-        return (k(rhs.head.args.head.args.head.tail.head.id.raw)
-                .must(contain('b')))
+        rhs = ast.s.stats.head.body.head.def_.def_.rhs
+        return k(rhs.app.head.argss.head.args.head.tail.head.id).must(be_token('b'))
 
     def import_(self) -> Expectation:
         ast = self.ast('one.two.three', 'importExpr')
-        return k(ast.last.raw).must(contain('three'))
+        return k(ast.s.last).must(be_token('three'))
 
     def literal_attr(self) -> Expectation:
         ast = self.ast('"i".a', 'simpleOrCompoundExpr')
-        return k(ast.tail.last.id.raw).must(contain('a'))
+        return k(ast.s.tail.last.id).must(be_token('a'))
 
     def literal_apply_args(self) -> Expectation:
         ast = self.ast('"i".a(1)', 'simpleOrCompoundExpr')
-        return k(ast.head.args.head.args.head.raw).must(contain('1'))
+        return k(ast.s.app.head.argss.head.args.head).must(be_token('1'))
 
     def literal_apply_args_as_arg(self) -> Expectation:
         ast = self.ast('f("i".a(1))', 'applyExpr')
-        args = ast.head.args.head.args.head.head.args.head.args
-        return k(args.head.raw).must(contain('1'))
+        args = ast.s.app.head.argss.head.args.head.app.head.argss.head.args
+        return k(args.head).must(be_token('1'))
 
     def cls_inst_attr(self) -> Expectation:
         ast = self.ast(cls_inst_attr, 'expr')
-        return k(ast.tail.head.id.raw).must(contain('c'))
+        return k(ast.s.tail.head.id).must(be_token('c'))
 
     def cls_inst_attr_assign(self) -> Expectation:
         ast = self.ast(cls_inst_attr_assign, 'templateBody')
-        rhs = ast.stats.head.body.head.def_.def_.rhs
+        rhs = ast.s.stats.head.body.head.def_.def_.rhs
         return (
-            k(rhs.head.templ.head.head.raw).must(contain('Cls')) &
-            k(rhs.tail.head.id.raw).must(contain('c'))
+            k(rhs.head.templ.head.head).must(be_token('Cls')) &
+            k(rhs.tail.head.id).must(be_token('c'))
         )
 
     def triple_bool(self) -> Expectation:
         ast = self.ast(triple_bool, 'templateBody')
-        return k(ast.stats.head.body.head.right.right.raw).must(contain('c'))
+        return k(ast.s.stats.head.body.head.right.right).must(be_token('c'))
 
     def select_template(self) -> Expectation:
         ast = self.ast('{a.b.c}', 'template')
-        expr = ast.stats.stats.head
+        expr = ast.s.stats.stats.head
         return (
-            k(expr.rule).must(equal('attrExpr')) &
-            k(expr.tail.last.id.raw).must(contain('c'))
+            k(expr).must(have_rule('attrExpr')) &
+            k(expr.tail.last.id).must(be_token('c'))
         )
 
     def attr_assign(self) -> Expectation:
         ast = self.expr(attr_assign, 'attrAssignExpr')
-        return k(ast.rhs.raw).must(contain('c'))
+        return k(ast.s.rhs).must(be_token('c'))
 
     def attr_assign_template(self) -> Expectation:
         ast = self.ast(attr_assign_template, 'template')
-        return k(ast.stats.stats.head.rule).must(equal('attrAssignExpr'))
+        return k(ast.s.stats.stats.head).must(have_rule('attrAssignExpr'))
 
     def ws_op_char(self) -> Expectation:
         return k(self.parse(' ', 'OpChar')).must(be_left)
 
     def plus(self) -> Expectation:
         ast = self.ast('+', 'op')
-        return k(ast.raw).must(equal('+'))
+        return k(ast).must(be_token('+'))
 
     def pluspluseq(self) -> Expectation:
         op = '++='
         ast = self.ast('a{} b'.format(op), 'infixExpr')
         return (
-            k(ast.method.raw).must(contain(op)) &
-            k(ast.right.raw).must(contain('b'))
+            k(ast.s.method).must(be_token(op)) &
+            k(ast.s.right).must(be_token('b'))
         )
 
     def plus_literal(self) -> Expectation:
         ast = self.ast('a + "b"', 'infixExpr')
-        return k(ast.right.rule).must(contain('singleLineStringLiteral'))
+        return k(ast.s.right).must(have_rule('singleLineStringLiteral'))
 
     def assign_ext(self) -> Expectation:
         ast = self.ast(assign_ext, 'attrAssignExpr')
-        return (k(ast.rhs.head.exprs.head.left.exprs.head.method.raw)
-                .must(contain('++')))
+        return k(ast.s.rhs.head.exprs.head.left.exprs.head.method).must(be_token('++'))
 
     def complex_eta(self) -> Expectation:
         ast = self.expr(complex_eta, 'etaExpansion')
-        return k(ast.expr.typeargs.types.head.raw).must(contain('A'))
+        return k(ast.s.expr.targs.types.head).must(be_token('A'))
 
     def chained_apply(self) -> Expectation:
         ast = self.ast(chained_apply, 'expr')
-        return (k(ast.tail.head.args.head.args.head.raw)
-                .must(contain('f')))
+        return k(ast.s.app.last.argss.head.args.head).must(be_token('f'))
 
     def modifiers(self) -> Expectation:
         ast = self.ast('{private final val a = 1}', 'template')
-        return k(ast.stats.stats.head.mod.last.raw).must(contain('final'))
+        return k(ast.s.stats.stats.head.mod.last).must(be_token('final'))
+
+    def id_type_args(self) -> Expectation:
+        ast = self.ast('name[A, B]', 'idTypeArgs')
+        return k(ast.s.targs.types.tail.head.tpe).must(be_token('B'))
 
     def apply_attr_type_args(self) -> Expectation:
         ast = self.ast(apply_attr_type_args, 'template')
         return (
-            k(ast.stats.stats.head.head.pre.rule)
-            .must(equal('attrExprTypeArgs')) &
-            (k(ast.stats.stats.head.head.pre.typeargs.types.head.raw))
-            .must(contain('C'))
+            k(ast.s.stats.stats.head).must(have_rule('applyExpr')) &
+            k(ast.s.stats.stats.head.app.head.meths.head.meth.targs.types.head).must(be_token('C'))
         )
 
     def apply_assign(self) -> Expectation:
         def go(c: str, target: str=None) -> Expectation:
             a = self.ast(c, 'applyAssignExpr')
-            return k(a.rhs.raw).must(contain('d'))
+            return k(a.s.rhs).must(be_token('d'))
         ast = self.ast('super[A].a.b(c) = d', 'applyAssignExpr')
         return (
             go('a((b, c)) = d') &
             go('a.b(c) = d') &
             go('(a.b ++ a.b)(c) = d') &
-            k(ast.rhs.raw).must(contain('d')) &
-            k(ast.expr.head.rule).must(equal('superAttr'))
+            k(ast.s.rhs).must(be_token('d')) &
+            k(ast.s.expr.head).must(have_rule('superAttr'))
         )
 
     def case_unapply(self) -> Expectation:
         ast = self.ast(case_unapply, 'block')
-        return (k(ast.body.head.pat.head.pats.tail.pats.head.head.raw)
-                .must(contain('_')))
+        return k(ast.s.body.head.pat.head.pats.tail.pats.head.head).must(be_token('_'))
 
     def equal(self) -> Expectation:
         ast = self.ast('a == b', 'infixExpr')
-        return k(ast.method.raw).must(contain('=='))
+        return k(ast.s.method).must(be_token('=='))
 
     def infix_prefix(self) -> Expectation:
         ast = self.ast('!a && b', 'infixExpr')
         return (
-            k(ast.left.rule).must(equal('prefixExpr')) &
-            k(ast.right.raw).must(contain('b'))
+            k(ast.s.left).must(have_rule('prefixExpr')) &
+            k(ast.s.right).must(be_token('b'))
         )
 
     def infix_attr_apply(self) -> Expectation:
         ast = self.ast('a.b(c) d e', 'infixExpr')
-        return k(ast.right.raw).must(contain('e'))
+        return k(ast.s.right).must(be_token('e'))
 
     def paramless_anonymous_fun(self) -> Expectation:
         ast = self.ast('{() => 1}', 'block')
-        return k(ast.body.head.rhs.head.raw).must(contain('1'))
+        return k(ast.s.body.head.rhs.head).must(be_token('1'))
 
     def paren_infix(self) -> Expectation:
         ast = self.expr('(a\n|| b // comm\n|| c)', 'parenthesizedExprsExpr')
-        return k(ast.exprs.head.right.right.raw).must(contain('c'))
+        return k(ast.s.exprs.head.right.right).must(be_token('c'))
 
     def type_attr_args(self) -> Expectation:
         ast = self.tpe('a.B[A]', 'appliedType')
-        return k(ast.args.types.head.raw).must(contain('A'))
+        return k(ast.s.args.types.head).must(be_token('A'))
 
     def infix_inst_oper(self) -> Expectation:
         ast = self.ast('new A a()', 'expr')
         return (
-            k(ast.left.rule).must(equal('classInstantiation')) &
-            k(ast.right.rule).must(equal('parenthesizedExprsExpr'))
+            k(ast.s.left).must(have_rule('classInstantiation')) &
+            k(ast.s.right).must(have_rule('parenthesizedExprsExpr'))
         )
 
     def splat_param(self) -> Expectation:
         ast = self.ast('def a(b: A*) = 1', 'def')
-        var = ast.def_.sig.paramss.explicit.head.params.last
+        var = ast.s.def_.sig.paramss.explicit.head.params.last
         return (
-            k(var.rule).must(equal('variadicParam')) &
-            k(var.aster.raw).must(contain('*'))
+            k(var).must(have_rule('variadicParam')) &
+            k(var.aster).must(be_token('*'))
         )
 
     def string_context(self) -> Expectation:
         ast = self.ast('sm"""sdf\nasdf"""', 'templateStat')
-        return k(ast.lquote.context.raw).must(contain('sm'))
+        return k(ast.s.lquote.context).must(be_token('sm'))
 
     def single_line_cases(self) -> Expectation:
         ast = self.ast('{ case a => b c d case _ => 2 }', 'blockExprContent')
-        return k(ast.head.body.tail.head.case.rhs.raw).must(contain('2'))
+        return k(ast.s.head.body.tail.head.case.rhs).must(be_token('2'))
 
     def only_implicit_params(self) -> Expectation:
         ast = self.stat('def a(implicit b: A) = c', 'templateStatDef')
-        id = ast.def_.def_.sig.paramss.implicit.params.last.id
-        return k(id.raw).must(contain('b'))
+        id = ast.s.def_.def_.sig.paramss.implicit.params.last.id
+        return k(id).must(be_token('b'))
 
     def type_lambda(self) -> Expectation:
         ast = self.tpe('A[B]#C', 'typeProjection')
-        return k(ast.id.raw).must(contain('C'))
+        return k(ast.s.id).must(be_token('C'))
 
     def symbolic_infix_type(self) -> Expectation:
         ast = self.ast('A :: B', 'infixType')
-        return k(ast.tail.head.infix.raw).must(contain('::'))
+        return k(ast.s.tail.head.infix).must(be_token('::'))
 
     def token_position(self) -> Expectation:
         ast = self.ast('def name[A]', 'dcl')
-        return k(ast.dcl.sig.id._data.pos) == 4
+        return k(ast.s.dcl.sig.id.data.pos) == 4
 
     def infix_position(self) -> Expectation:
         ast = self.ast('A :: B', 'infixType')
-        return k(ast.tail.head.infix._data.pos) == 2
+        return k(ast.s.tail.head.infix.data.pos) == 2
 
     def case_clause_position(self) -> Expectation:
         ast = self.ast('val x = a match { case a: A => b case c => d }', 'templateStat')
-        return k(ast.def_.def_.rhs.cases.head.rhs._data.pos) == 31
+        return k(ast.s.def_.def_.rhs.cases.head.rhs.data.pos) == 31
 
     def multiline_expr(self) -> Expectation:
         ast = self.expr(multiline_expr, 'applyExpr')
-        return k(ast.tail.head.args.head.args.head.raw).must(be_right('fun2'))
+        return k(ast.s.app[1].argss.head.args.head).must(be_token('fun2'))
 
     def multiline_val(self) -> Expectation:
         ast = self.def_(multiline_val, 'valVarDef')
-        return k(ast.def_.rhs.head.args.head.args.head.raw).must(be_right('fun'))
+        return k(ast.s.def_.rhs.app.head.argss.head.args.head).must(be_token('fun'))
 
     def caseclause_arg(self) -> Expectation:
         ast = self.def_(caseclause_arg, 'valVarDef')
-        return k(ast.def_.rhs.tail.head.args.head.body.head.rhs.raw).must(be_right('d'))
+        return k(ast.s.def_.rhs.app.last.argss.head.body.head.rhs).must(be_token('d'))
 
 stat = '''\
 '''

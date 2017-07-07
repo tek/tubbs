@@ -259,7 +259,7 @@ applyAssignExprPre =
   | wildcard
   ;
 applyAssignExpr =
-expr:applyAssignExprPre app:argumentsExpr assign:assign rhs:expr;
+expr:applyAssignExprPre app:argListExpr assign:assign rhs:expr;
 assignExpr =
   | attrAssignExpr
   | simpleAssignExpr
@@ -272,13 +272,11 @@ argumentExpr =
 argumentExprsTail = [nl1:nl] comma:',' [nl2:nl] arg:argumentExpr;
 argumentExprs = head:argumentExpr tail:{argumentExprsTail};
 arguments = lpar:lpar [args:argumentExprs] rpar:rpar;
-argumentSplat =
-expr:simpleOrCompoundExpr colon:':' wildcard:wildcard aster:'*';
-argumentsWithSplat =
-lpar:lpar regular:[args:argumentExprs comma:','] splat:argumentSplat rpar:rpar;
+argumentSplat = expr:simpleOrCompoundExpr colon:':' wildcard:wildcard aster:'*';
+argumentsWithSplat = lpar:lpar regular:[args:argumentExprs comma:','] splat:argumentSplat rpar:rpar;
 # FIXME nl before block? foo { a } is ok, but foo \n { a }?
 argumentsBlock = [nl] block;
-argumentsExpr =
+argListExpr =
   | argumentsWithSplat
   | arguments
   | argumentsBlock
@@ -309,15 +307,21 @@ attrExprPre =
   | classInstantiation
   ;
 attrExpr = head:attrExprPre tail:{selectrest}+;
-attrExprTypeArgs = expr:attrExpr typeargs:typeArgs;
-applyExprPre =
-  | attrExprTypeArgs
-  | attrExpr
-  | simpleExprPre
+attrExprTypeArgs = expr:attrExpr targs:typeArgs;
+idTypeArgs = id:id targs:typeArgs;
+applyExprMethod =
+  | idTypeArgs
+  | id
   ;
-applyExpr1 = pre:applyExprPre args:{argumentsExpr}+;
-applyExprChain = [nl:nl] {dot:'.' id:id}+ args:{argumentsExpr};
-applyExpr = head:applyExpr1 tail:{applyExprChain};
+oneComponentExpr =
+  | literal
+  | applyExprMethod
+  | wildcard
+  | this
+  ;
+applyMethodApp = dot:'.' meth:applyExprMethod;
+applyExprChain = [nl:nl] meths:{applyMethodApp} argss:{argListExpr}+;
+applyExpr = pre:oneComponentExpr app:{applyExprChain}+;
 simpleExpr1 =
   | literal
   | parenthesizedExprsExpr
@@ -332,7 +336,7 @@ etaPre =
   | simpleExpr1
   ;
 etaExpansion = expr:etaPre wildcard:wildcard;
-simpleExprTypeArgs = expr:simpleExpr1 typeargs:typeArgs;
+simpleExprTypeArgs = expr:simpleExpr1 targs:typeArgs;
 simpleExpr =
   | simpleExprTypeArgs
   | simpleExpr1
@@ -492,8 +496,8 @@ localModifier = 'abstract'
 accessModifier = ('private' | 'protected') [accessQualifier];
 accessQualifier = lbrack:lbrack (id | 'this') rbrack:rbrack;
 
-annotation = '@' regularType {argumentsExpr};
-constrAnnotation = '@' regularType argumentsExpr;
+annotation = '@' regularType {argListExpr};
+constrAnnotation = '@' regularType argListExpr;
 
 templateStatDef = {anno:annotation [nl:nl]} {mod:modifier} def:def;
 templateStatDcl = {anno:annotation [nl:nl]} {mod:modifier} dcl:dcl;
@@ -606,7 +610,7 @@ classTemplate = [earlyDefs] classParents [template];
 traitTemplate = [earlyDefs] traitParents [template];
 classParents = constr {'with' annotOrRegularType};
 traitParents = annotOrRegularType {'with' annotOrRegularType};
-constr = annotOrRegularType {argumentsExpr};
+constr = annotOrRegularType {argListExpr};
 earlyDefs = lbrace:lbrace [earlyDef {eol earlyDef}] rbrace:rbrace [nl] 'with';
 earlyDef = {annotation [nl]} {modifier} patVarDef;
 class = [case] 'class' classDef;
@@ -621,7 +625,7 @@ tmplDef =
 constrExpr = selfInvocation
   | constrBlock;
 constrBlock = '{' selfInvocation {eol blockStat} '}';
-selfInvocation = 'this' argumentsExpr {argumentsExpr};
+selfInvocation = 'this' argListExpr {argListExpr};
 
 topStat =
   | comment
