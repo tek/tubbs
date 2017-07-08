@@ -6,14 +6,14 @@ from kallikrein.matchers import contain, equal
 from kallikrein import k, unsafe_k
 from kallikrein.expectation import Expectation, AlgExpectation
 from kallikrein.matchers.either import be_right
-from kallikrein.matchers.length import have_length
 from amino import _, List, __
 from amino.list import Lists
 
 from tubbs.tatsu.scala import Parser
-from tubbs.formatter.tree import Tree, ListNode, Node
 from tubbs.formatter.scala import Breaker, Indenter
-from tubbs.tatsu.ast import AstMap
+from tubbs.tatsu.ast import AstMap, RoseAstTree, ast_rose_tree, AstList, AstElem
+
+from unit._support.ast import be_token
 
 fun = '''def fun[A, B, C](p1: Type1, p2: Type2)\
 (implicit p3: A :: B, p4: Type4) = {\
@@ -59,8 +59,7 @@ class ScalaFormatSpec:
     tree eols $eols
     range of bols and eols $bols_eols
     tree lines $tree_lines
-    tree line nodes $line_nodes
-    tree nodes at beginning of lines $bol_nodes
+    tree boundary nodes $boundary_nodes
     indent broken function lines $indent_broken
     break conditionally on previous breaks $break_lookbehind
     '''
@@ -78,77 +77,75 @@ class ScalaFormatSpec:
         unsafe_k(ast).must(be_right)
         return ast.value
 
-    def tree(self, code: str) -> Tree:
-        return Tree(self.parse(code))
+    def tree(self, code: str) -> RoseAstTree:
+        return ast_rose_tree(code)
 
     @lazy
-    def fun_tree(self) -> Tree:
-        return self.tree(fun)
+    def fun_ast(self) -> AstElem:
+        return self.parse(fun)
 
     @lazy
-    def broken_fun_tree(self) -> Tree:
-        return self.tree(broken_fun)
+    def fun_tree(self) -> RoseAstTree:
+        return ast_rose_tree(self.fun_ast)
+
+    @lazy
+    def broken_fun_ast(self) -> AstElem:
+        return self.parse(broken_fun)
+
+    @lazy
+    def broken_fun_tree(self) -> RoseAstTree:
+        return ast_rose_tree(self.broken_fun_ast)
 
     def range(self) -> Expectation:
-        def check_node(node: Node) -> None:
-            if not isinstance(node, ListNode):
+        def check_node(node: AstElem) -> None:
+            if not isinstance(node, AstList):
                 start, end = node.range
                 unsafe_k(fun[start:end]) == node.text
-        tree = self.fun_tree.root
-        tree.foreach(check_node)
+        self.fun_ast.foreach(check_node)
 
     def tree_lines(self) -> Expectation:
-        lines = self.broken_fun_tree.lines
+        lines = self.broken_fun_ast.lines
         return k(lines.join_lines).must(equal(broken_fun))
 
     def bols(self) -> Expectation:
-        bols = self.broken_fun_tree.bols
+        bols = self.broken_fun_ast.bols
         return k(bols) == List(0, 17, 40, 77, 96, 115, 127, 129, 131)
 
     def eols(self) -> Expectation:
-        eols = self.broken_fun_tree.eols
+        eols = self.broken_fun_ast.eols
         return k(eols) == List(16, 39, 76, 95, 114, 126, 128, 130)
 
     def bols_eols(self) -> Expectation:
         lines = Lists.lines(broken_fun)
-        tree = self.broken_fun_tree
-        be = tree.bols.zip(tree.eols)
+        ast = self.broken_fun_ast
+        be = ast.bols.zip(ast.eols)
         def check(be: Tuple[List[int], List[int]], line: str) -> None:
             start, end = be
             return k(line) == broken_fun[start:end]
         exps = (be.zip(lines)).map2(check)
         return exps.fold(AlgExpectation)
 
-    def line_nodes(self) -> Expectation:
-        nodes = self.broken_fun_tree.line_nodes
-        return k(nodes).must(have_length(Lists.lines(broken_fun).length))
-
-    def bol_nodes(self) -> Expectation:
-        nodes = self.broken_fun_tree.bol_nodes
+    def boundary_nodes(self) -> Expectation:
+        nodes = self.broken_fun_ast.boundary_nodes
         return (
-            k(nodes.head // __.lift(1) / _.key).must(contain('defkw')) &
-            k(nodes.lift(1) // _.head / _.key).must(contain('paramss')) &
-            k(nodes.lift(2) // _.head / _.key).must(contain('lpar')) &
-            k(nodes.lift(3) // _.head / _.key).must(contain('body')) &
-            k(nodes.lift(4) // _.head / _.key).must(contain('cases')) &
-            k(nodes.lift(5) // _.head / _.key).must(contain('case')) &
-            k(nodes.lift(6) // _.head / _.key).must(contain('brace'))
+            k(nodes.s.defkw).must(be_token('def')) &
+            k(nodes.s.def_.rhs.body.head.def_.def_.rhs.cases.head.casekw).must(be_token('case')) &
+            k(nodes.s.def_.rhs.rbrace.brace).must(be_token('}'))
         )
 
     def break_fun(self) -> Expectation:
         breaker = Breaker(37)
-        broken = breaker.format(self.fun_tree)
+        broken = breaker.format(self.fun_ast).attempt
         return k(broken / _.join_lines).must(contain(broken_fun))
 
     def indent_broken(self) -> Expectation:
         indenter = Indenter(2)
-        tree = self.broken_fun_tree
-        indented = indenter.format(tree)
+        indented = indenter.format(self.broken_fun_ast).attempt
         return k(indented / _.join_lines).must(contain(formatted_fun))
 
     def break_lookbehind(self) -> Expectation:
         breaker = Breaker(12)
-        broken = breaker.format(self.tree(lookbehind))
+        broken = breaker.format(self.parse(lookbehind)).attempt
         return k(broken).must(contain(lookbehind_target))
 
 __all__ = ('ScalaFormatSpec',)

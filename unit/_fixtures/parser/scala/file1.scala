@@ -34,10 +34,10 @@ trait Implicits {
   import typingStack.{ printTyping }
   import typeDebug._
 
-  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
+  def inferImplicit(ast: AstElem, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
     inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent = true, tree.pos)
 
-  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean): SearchResult =
+  def inferImplicit(ast: AstElem, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean): SearchResult =
     inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent, tree.pos)
 
   /** Search for an implicit value. See the comment on `result` at the end of class `ImplicitSearch`
@@ -59,7 +59,7 @@ trait Implicits {
    *                                 If it's set NoPosition, then position-based services will use `tree.pos`
    *  @return                        A search result
    */
-  def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean, pos: Position): SearchResult = {
+  def inferImplicit(ast: AstElem, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean, pos: Position): SearchResult = {
     // Note that the isInvalidConversionTarget seems to make a lot more sense right here, before all the
     // work is performed, than at the point where it presently exists.
     val shouldPrint     = printTypings && !context.undetparams.isEmpty
@@ -91,7 +91,7 @@ trait Implicits {
 
   /** A friendly wrapper over inferImplicit to be used in macro contexts and toolboxes.
    */
-  def inferImplicit(tree: Tree, pt: Type, isView: Boolean, context: Context, silent: Boolean, withMacrosDisabled: Boolean, pos: Position, onError: (Position, String) => Unit): Tree = {
+  def inferImplicit(ast: AstElem, pt: Type, isView: Boolean, context: Context, silent: Boolean, withMacrosDisabled: Boolean, pos: Position, onError: (Position, String) => Unit): bi_tree = {
     val wrapper1 = if (!withMacrosDisabled) (context.withMacrosEnabled[SearchResult] _) else (context.withMacrosDisabled[SearchResult] _)
     def wrapper(inference: => SearchResult) = wrapper1(inference)
     val result = wrapper(inferImplicit(tree, pt, reportAmbiguous = true, isView = isView, context = context, saveAmbiguousDivergent = !silent, pos = pos))
@@ -161,7 +161,7 @@ trait Implicits {
    *                  that were instantiated by the winning implicit.
    *  @param undetparams undetermined type parameters
    */
-  class SearchResult(val tree: Tree, val subst: TreeTypeSubstituter, val undetparams: List[Symbol]) {
+  class SearchResult(val ast: AstElem, val subst: TreeTypeSubstituter, val undetparams: List[Symbol]) {
     override def toString = "SearchResult(%s, %s)".format(tree,
       if (subst.isEmpty) "" else subst)
 
@@ -244,7 +244,7 @@ trait Implicits {
 
   /** A class which is used to track pending implicits to prevent infinite implicit searches.
    */
-  case class OpenImplicit(info: ImplicitInfo, pt: Type, tree: Tree)
+  case class OpenImplicit(info: ImplicitInfo, pt: Type, ast: AstElem)
 
   /** A sentinel indicating no implicit was found */
   val NoImplicitInfo = new ImplicitInfo(null, NoType, NoSymbol) {
@@ -322,7 +322,7 @@ trait Implicits {
    *                          (useful when we infer synthetic stuff and pass EmptyTree in the `tree` argument)
    *                          If it's set to NoPosition, then position-based services will use `tree.pos`
    */
-  class ImplicitSearch(tree: Tree, pt: Type, isView: Boolean, context0: Context, pos0: Position = NoPosition) extends Typer(context0) with ImplicitsContextErrors {
+  class ImplicitSearch(ast: AstElem, pt: Type, isView: Boolean, context0: Context, pos0: Position = NoPosition) extends Typer(context0) with ImplicitsContextErrors {
     val searchId = implicitSearchId()
     private def typingLog(what: String, msg: => String) = {
       if (printingOk(tree))
@@ -648,7 +648,7 @@ trait Implicits {
 
         typingStack.showAdapt(itree0, itree3, pt, context)
 
-        def hasMatchingSymbol(tree: Tree): Boolean = (tree.symbol == info.sym) || {
+        def hasMatchingSymbol(ast: AstElem): Boolean = (tree.symbol == info.sym) || {
           tree match {
             case Apply(fun, _)          => hasMatchingSymbol(fun)
             case TypeApply(fun, _)      => hasMatchingSymbol(fun)
@@ -747,7 +747,7 @@ trait Implicits {
      */
     def isValid(sym: Symbol) = {
       def hasExplicitResultType(sym: Symbol) = {
-        def hasExplicitRT(tree: Tree) = tree match {
+        def hasExplicitRT(ast: AstElem) = tree match {
           case x: ValOrDefDef => !x.tpt.isEmpty
           case _              => false
         }
@@ -1129,7 +1129,7 @@ trait Implicits {
       * An EmptyTree is returned if materialization fails.
       */
     private def tagOfType(pre: Type, tp: Type, tagClass: Symbol): SearchResult = {
-      def success(arg: Tree) = {
+      def success(arg: bi_tree) = {
         def isMacroException(msg: String): Boolean =
           // [Eugene] very unreliable, ask Hubert about a better way
           msg contains "exception during macro expansion"
@@ -1195,7 +1195,7 @@ trait Implicits {
       val opt = flavor == OptManifestClass
 
       /* Creates a tree that calls the factory method called constructor in object scala.reflect.Manifest */
-      def manifestFactoryCall(constructor: String, tparg: Type, args: Tree*): Tree =
+      def manifestFactoryCall(constructor: String, tparg: Type, args: bi_tree*): bi_tree =
         if (args contains EmptyTree) EmptyTree
         else typedPos(tree.pos.focus) {
           val mani = gen.mkManifestFactoryCall(full, constructor, tparg, args.toList)
@@ -1214,7 +1214,7 @@ trait Implicits {
 
       def findSubManifest(tp: Type) = findManifest(tp, if (full) FullManifestClass else OptManifestClass)
       def mot(tp0: Type, from: List[Symbol], to: List[Type]): SearchResult = {
-        implicit def wrapResult(tree: Tree): SearchResult =
+        implicit def wrapResult(ast: AstElem): SearchResult =
           if (tree == EmptyTree) SearchFailure else new SearchResult(tree, if (from.isEmpty) EmptyTreeTypeSubstituter else new TreeTypeSubstituter(from, to), Nil)
 
         val tp1 = tp0.dealias
@@ -1303,7 +1303,7 @@ trait Implicits {
       }
     }
 
-    def wrapResult(tree: Tree): SearchResult =
+    def wrapResult(ast: AstElem): SearchResult =
       if (tree == EmptyTree) SearchFailure else new SearchResult(atPos(pos.focus)(tree), EmptyTreeTypeSubstituter, Nil)
 
     /** Materializes implicits of predefined types (currently, manifests and tags).

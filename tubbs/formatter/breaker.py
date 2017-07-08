@@ -1,21 +1,19 @@
 import abc
-from typing import Callable, Sized, Tuple, Any, Union, cast
+from typing import Callable, Sized, Tuple, Any, Union, cast, Iterable
 
 from hues import huestr
 
-from amino import Either, List, L, Boolean, _, __, Right, Maybe, Map, Empty, Task
+from amino import Either, List, L, Boolean, _, __, Maybe, Map, Empty, Task
 from amino.util.string import snake_case
-from amino.func import dispatch
 from amino.lazy import lazy
-from amino.tree import MapNode, ListNode, LeafNode
 from amino.regex import Regex
 
 from ribosome.record import Record, int_field, float_field, field, str_field, any_field
 from ribosome.nvim import NvimFacade
 from ribosome.util.callback import VimCallback
 
-from tubbs.formatter.tree import Tree, BiNode, BiInode
 from tubbs.formatter.base import Formatter, VimFormatterMeta
+from tubbs.tatsu.ast import AstElem, RoseData, ast_rose_tree, RoseAstTree
 
 
 def hl(data: str) -> str:
@@ -34,19 +32,19 @@ class BreakHandler(Record):
     rule = str_field()
 
 
-SingleBreakData = Tuple[str, float, float]
+SingleBreakData = Tuple[float, float]
 StrictBreakData = Union[List[SingleBreakData], SingleBreakData]
 
 
 def is_break(a: Any) -> bool:
-    return isinstance(a, Sized) and len(a) == 3
+    return isinstance(a, Sized) and len(a) == 2
 
 
 class StrictBreak(Record):
     position = int_field()
     prio = float_field()
     rule = str_field()
-    node = field(BiNode)
+    node = field(RoseData)
 
     @property
     def _str_extra(self) -> List[Any]:
@@ -62,7 +60,7 @@ class StrictBreak(Record):
 
 class LazyBreakData:
 
-    def __init__(self, node: BiNode, rule: str, f: Callable[[List['Break']], StrictBreakData]) -> None:
+    def __init__(self, node: RoseAstTree, rule: str, f: Callable[[List['Break']], StrictBreakData]) -> None:
         self.node = node
         self.rule = rule
         self.f = f
@@ -70,7 +68,7 @@ class LazyBreakData:
     def invoke(self, breaks: List[StrictBreak]) -> StrictBreakData:
         return self.f(BreakState(self.node, breaks))
 
-    def brk(self, breaks: List[StrictBreak]) -> Either[str, List[StrictBreak]]:
+    def brk(self, breaks: List[StrictBreak]) -> List[StrictBreak]:
         return cons_breaks(self.node, self.rule, self.invoke(breaks))
 
 
@@ -86,25 +84,19 @@ LazyBreakCallback = Callable[[List[Break]], StrictBreakData]
 BreakResult = Union[LazyBreakCallback, StrictBreakData]
 
 
-def cons_breaks(node: BiNode, rule: str, result: BreakResult) -> Either[str, List[Break]]:
-    def mkbreak(position: int, prio: float) -> Either[str, StrictBreak]:
-        return Boolean(prio > 0).m(StrictBreak(position=position, prio=float(prio), rule=rule, node=node))
-    def mkbreaks(name: str, before: int, after: int) -> Either[str, List]:
-        return (
-            node
-            .sub_range(name)
-            .map2(lambda start, end: List((start, before), (end, after)).flat_map2(mkbreak))
-        )
-    def mkbreakss(a: Tuple) -> Either[str, List[Break]]:
-        return mkbreaks(*a) if is_break(a) else Right(List())
+def cons_breaks(node: RoseAstTree, rule: str, result: BreakResult) -> List[Break]:
+    data = node.data
+    def mkbreak(position: int, prio: float) -> Maybe[StrictBreak]:
+        return Maybe.iff(prio > 0)(StrictBreak(position=position, prio=float(prio), rule=rule, node=data))
+    def mkbreaks(before: int, after: int) -> Either[str, List]:
+        start, end = node.range
+        return List((start, before), (end, after)).flat_map2(mkbreak)
+    def mkbreakss(a: Iterable) -> List[Break]:
+        return mkbreaks(*a) if is_break(a) else List()
     return (
-        cast(List[SingleBreakData], result)
-        .map(mkbreakss)
-        .filter(_.present)
-        .sequence(Either) /
-        _.join
+        cast(List[SingleBreakData], result) // mkbreakss
         if isinstance(result, List) else
-        Right(List(LazyBreakData(node, rule, result)))
+        List(LazyBreakData(node, rule, result))
         if callable(result) else
         mkbreakss(result)
     )
@@ -112,16 +104,16 @@ def cons_breaks(node: BiNode, rule: str, result: BreakResult) -> Either[str, Lis
 
 class BreakState:
 
-    def __init__(self, node: BiNode, breaks: List[Break]) -> None:
+    def __init__(self, node: RoseData, breaks: List[Break]) -> None:
         self.node = node
         self.breaks = breaks
 
     @property
     def is_token(self) -> Boolean:
-        return Boolean(isinstance(self.node, LeafNode))
+        return self.node.is_token
 
     @lazy
-    def parent_inode(self) -> BiInode:
+    def parent_inode(self) -> RoseData:
         p = self.node.parent
         return p.parent if self.is_token else p
 
@@ -150,8 +142,8 @@ class BreakState:
     @lazy
     def parent_breaks(self) -> List[Break]:
         siblings = self.parent_inode.sub
-        def match(node: BiNode, break_node: BiNode) -> bool:
-            return node == break_node or node.contains(break_node)
+        def match(node: RoseAstTree, break_node: RoseData) -> bool:
+            return node.data == break_node or node.data.ast.contains(break_node.ast)
         return (
             self.breaks
             .filter(lambda a: siblings.exists(L(match)(_, a.node)))
@@ -171,35 +163,37 @@ class BreakRules:
         return List()
 
 
+def handle_lazy_breaks(breaks: List[Break]) -> Task[List[StrictBreak]]:
+    lazy, strict = breaks.split_type(LazyBreakData)
+    strict1 = Task.delay(lazy.flat_map, __.brk(strict))
+    return strict1 / strict.add
+
+
 class BreakerBase(Formatter):
 
     def __init__(self, textwidth: int) -> None:
         self.textwidth = textwidth
-        self.brk = dispatch(self, List(MapNode, ListNode, LeafNode), 'break_')
 
     @abc.abstractmethod
-    def handler(self, node: BiNode, tmpl: str) -> Callable[[BiNode], BreakData]:
+    def handler(self, node: RoseData, tmpl: str) -> Callable[[RoseData], BreakData]:
         ...
 
     @abc.abstractproperty
-    def default_handler(self) -> Callable[[BiNode], BreakData]:
+    def default_handler(self) -> Callable[[RoseData], BreakData]:
         ...
 
-    def format(self, tree: Tree) -> Either:
-        return Right(self.apply_breaks(tree, self.breaks(tree.root).attempt.get_or_raise))
+    def format(self, ast: AstElem) -> Task[List[str]]:
+        rt = ast_rose_tree(ast)
+        return self.breaks(rt) / L(self.apply_breaks)(ast, _)
 
-    def breaks(self, root: BiNode) -> Task[List[StrictBreak]]:
-        def handle_lazy(breaks: List[Break]) -> Task[List[StrictBreak]]:
-            lazy, strict = breaks.split_type(LazyBreakData)
-            strict1 = lazy.traverse(__.brk(strict), Either).map(_.join).task()
-            return strict1 / strict.add
-        return self.brk(root, List()) // handle_lazy
+    def breaks(self, ast: RoseAstTree) -> Task[List[StrictBreak]]:
+        return self.brk(ast, List()) // handle_lazy_breaks
 
-    def apply_breaks(self, tree: Tree, breaks: List[Break]) -> List[str]:
+    def apply_breaks(self, ast: AstElem, breaks: List[Break]) -> List[str]:
         self.log.debug('applying breaks: {}'.format(breaks))
         return (
-            tree.lines
-            .zip(tree.bols)
+            ast.lines
+            .zip(ast.bols)
             .flat_map2(L(self.break_line)(_, breaks, _))
             .map(__.rstrip())
         )
@@ -218,10 +212,7 @@ class BreakerBase(Formatter):
             self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
             left = cur[:local_pos]
             right = cur[local_pos:]
-            self.log.ddebug(
-                lambda:
-                'broke line into\n{}\n{}'.format(hl(left), hl(right))
-            )
+            self.log.ddebug(lambda: 'broke line into\n{}\n{}'.format(hl(left), hl(right)))
             return rec2(left, start) + rec2(right, pos)
         def rec0(brk: StrictBreak) -> Either[str, List[str]]:
             msg = 'line did not exceed tw: {}'
@@ -237,46 +228,42 @@ class BreakerBase(Formatter):
         ).leffect(self.log.ddebug)
         return broken | List(cur)
 
-    def lookup_handler(self, node: BiNode, tmpl: str) -> BreakHandler:
-        def handler(suf: str, or_else: Callable=lambda: Empty()) -> Maybe[BreakHandler]:
-            attr = tmpl.format(suf)
+    def lookup_handler(self, node: RoseData) -> BreakHandler:
+        def handler(attr: str, or_else: Callable=lambda: Empty()) -> Maybe[BreakHandler]:
             self.log.ddebug('trying break handler {}'.format(attr))
-            h = self.handler(node, attr) / L(BreakHandler.from_attr('handler'))(_, rule=suf)
+            h = self.handler(node, attr) / L(BreakHandler.from_attr('handler'))(_, rule=attr)
             if h.present:
                 self.log.ddebug('success')
             return h.o(or_else)
         rule = snake_case(node.rule)
-        return handler(
-            '{}_{}'.format(rule, node.key),
-            L(handler)(rule, L(handler)(node.key))
-        ) | BreakHandler(handler=self.default_handler, rule=rule)
+        return (
+            handler('{}_{}'.format(rule, node.key), L(handler)(rule, L(handler)(node.key))) |
+            BreakHandler(handler=self.default_handler, rule=rule)
+        )
 
-    def handle(self, node: BiNode, tmpl: str, breaks: List[Break]) -> Either:
-        handler = self.lookup_handler(node, tmpl)
-        result = handler.handler(BreakState(node, breaks))
+    def handle(self, node: RoseAstTree, breaks: List[Break]) -> List[Break]:
+        handler = self.lookup_handler(node.data)
+        result = handler.handler(BreakState(node.data, breaks))
         return cons_breaks(node, handler.rule, result)
 
-    def sub_breaks(self, node: BiInode, breaks: List[Break]) -> Task[List[Break]]:
+    def sub_breaks(self, node: RoseAstTree, breaks: List[Break]) -> Task[List[Break]]:
         return (
-            node.sub.traverse(L(self.brk)(_, breaks), Task) /
-            _.join /
+            node.sub.drain.flat_traverse(L(self.brk)(_, breaks), Task) /
             breaks.add
         )
 
-    def break_inode(self, node: BiInode, breaks: List[Break], pref: str) -> Task[List[Break]]:
+    def brk(self, node: RoseAstTree, breaks: List[Break]) -> Task[List[Break]]:
+        handler = self.break_node if node.data.is_token else self.break_inode
+        return handler(node, breaks)
+
+    def break_inode(self, node: RoseAstTree, breaks: List[Break]) -> Task[List[Break]]:
         return (
-            self.handle(node, '{}_{{}}'.format(pref), breaks).task() //
+            self.break_node(node, breaks) //
             L(self.sub_breaks)(node, _)
         )
 
-    def break_map_node(self, node: MapNode, breaks: List[Break]) -> Task[List[Break]]:
-        return self.break_inode(node, breaks, 'map')
-
-    def break_list_node(self, node: ListNode, breaks: List[Break]) -> Task[List[Break]]:
-        return self.break_inode(node, breaks, 'list')
-
-    def break_leaf_node(self, node: LeafNode, breaks: List[Break]) -> Task[List[Break]]:
-        return self.handle(node, 'token_{}', breaks).task()
+    def break_node(self, node: RoseAstTree, breaks: List[Break]) -> Task[List[Break]]:
+        return Task.delay(self.handle, node, breaks)
 
 
 class Breaker(BreakerBase):
@@ -285,11 +272,11 @@ class Breaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: BiNode, attr: str) -> Maybe[Callable[[BiNode], BreakData]]:
+    def handler(self, node: RoseData, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
         return Maybe.check(getattr(self.rules, attr, None))
 
     @property
-    def default_handler(self) -> Callable[[BiNode], BreakData]:
+    def default_handler(self) -> Callable[[RoseData], BreakData]:
         return self.rules.default
 
 
@@ -299,11 +286,11 @@ class DictBreaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: BiNode, attr: str) -> Maybe[Callable[[BiNode], BreakData]]:
+    def handler(self, node: RoseData, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
         return self.rules.lift(attr) / (lambda a: lambda node: a)
 
     @property
-    def default_handler(self) -> Callable[[BiNode], BreakData]:
+    def default_handler(self) -> Callable[[RoseData], BreakData]:
         return lambda node: List()
 
 

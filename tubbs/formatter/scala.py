@@ -8,26 +8,25 @@ from ribosome.nvim import NvimFacade
 from ribosome.nvim.components import NvimComponent
 
 from tubbs.formatter.breaker import Breaker as BreakerBase
-from tubbs.formatter.indenter import Indenter as IndenterBase
-from tubbs.tatsu.ast import AstMap, AstElem, AstList
-from tubbs.formatter.tree import Tree, BiNode
+from tubbs.formatter.indenter import Indenter as IndenterBase, Indent, after, from_here, IndentResult, keep, children
+from tubbs.tatsu.ast import AstMap, AstElem, AstList, RoseData
 from tubbs.formatter.breaker import StrictBreakData, BreakRules, BreakData, BreakState
 from tubbs.formatter.indenter import IndentRules
 
 
 class Formatter(FormatterBase):
 
-    def no_rule(self, tree: Tree) -> Either[str, List[str]]:
-        return Left('cannot format rule `{}`'.format(tree.info.rule))
+    def no_rule(self, ast: AstElem) -> Either[str, List[str]]:
+        return Left('cannot format rule `{}`'.format(ast.info.rule))
 
     def _format_rule(self, ast: AstMap) -> Either[str, List[str]]:
         handler = getattr(self, snake_case(ast.rule), self.no_rule)
         return handler(ast)
 
-    def format(self, ast: Tree) -> Either[str, List[str]]:
+    def format(self, ast: AstElem) -> Either[str, List[str]]:
         return self._format_rule(ast.root)
 
-    def template_stat(self, ast: Tree) -> Either[str, List[str]]:
+    def template_stat(self, ast: AstElem) -> Either[str, List[str]]:
         return Left('NI')
 
 
@@ -41,56 +40,59 @@ def nel(ast: AstElem) -> bool:
     return isinstance(ast, AstList) and ast.data.length > 0
 
 
-def in_multi_line_block(node: BiNode) -> bool:
-    return node.parent.parent.data.body.tail.e.exists(nel)
+def in_multi_line_block(node: RoseData) -> bool:
+    return node.parent.parent.data.ast.s.body.tail.e.exists(nel)
 
 
 class ScalaBreakRules(BreakRules):
+    pass
 
-    def map_case_clause(self, state: BreakState) -> BreakData:
+    def case_clause(self, state: BreakState) -> BreakData:
         ''' TODO check parent; if more than one case is present, return
         1.0, else 0.9
         '''
-        return 'casekw', 1.0, 0.0
+        return 1.0, 0.0
 
-    def map_param_clause(self, state: BreakState) -> BreakData:
-        return 'lpar', 0.7, 0.1
+    def param_clause(self, state: BreakState) -> BreakData:
+        return 0.7, 0.1
 
-    def map_implicit_param_clause(self, state: BreakState) -> BreakData:
-        return 'lpar', 0.75, 0.1
+    def implicit_param_clause(self, state: BreakState) -> BreakData:
+        return 0.75, 0.1
 
-    def map_block_body(self, state: BreakState) -> BreakData:
-        return 'head', 0.9, 0.0
+    def block_body(self, state: BreakState) -> BreakData:
+        return 0.9, 0.0
 
-    def list_block_rest_stat(self, state: BreakState) -> BreakData:
-        return 'stat', 0.9, 0.0
+    def block_rest_stat(self, state: BreakState) -> BreakData:
+        return 0.9, 0.0
 
-    def token_seminl_semi(self, state: BreakState) -> BreakData:
-        return 'semi', 0.0, 1.1
+    def seminl_semi(self, state: BreakState) -> BreakData:
+        return 0.0, 1.1
 
-    def token_lbrace(self, state: BreakState) -> BreakData:
-        return 'lbrace', 0.0, (1.0 if in_multi_line_block(state.node) else 0.3)
+    def lbrace(self, state: BreakState) -> BreakData:
+        return 0.0, (1.0 if in_multi_line_block(state.node) else 0.3)
 
-    def token_rbrace(self, state: BreakState) -> BreakData:
+    def rbrace(self, state: BreakState) -> BreakData:
         def decide(state: BreakState) -> StrictBreakData:
-            opening_brace = state.node.parent.parent.data.lbrace.brace.e
-            opening_break = state.parent_breaks.find(lambda a: opening_brace.contains(a.node.data))
+            opening_brace = state.node.parent.parent.data.ast.s.lbrace.brace.e
+            opening_break = state.parent_breaks.find(lambda a: opening_brace.contains(a.node.ast))
             force_break = opening_break.present or in_multi_line_block(state.node)
-            return 'rbrace', (1.0 if force_break else 0.3), 0.0
+            return (1.0 if force_break else 0.3), 0.0
         return decide
 
-    def map_assign(self, state: BreakState) -> BreakData:
+    def assign(self, state: BreakState) -> BreakData:
         def decide(state: BreakState) -> StrictBreakData:
-            rhs = state.node.parent.data.rhs
+            rhs = state.node.parent.data.ast.s.rhs
             lbrace = state.after('lbrace')
             after = (
                 0.0
                 if state.node.parent.rule == 'param' else
                 0.3
-                if rhs.rule == 'block' and rhs.valid and lbrace else
+                if rhs.rule.contains('block') and rhs.valid and lbrace else
                 0.8
             )
-            return 'op', 0.0, after
+            print(state.node.data.ast.short)
+            print(after)
+            return 0.0, after
         return decide
 
 
@@ -109,20 +111,17 @@ class VimBreaker(Breaker, VimCallback):
 
 class ScalaIndentRules(IndentRules):
 
-    def case_clauses(self, node: BiNode) -> int:
-        return 1
+    def assign_eol(self, node: RoseData) -> IndentResult:
+        return after(node, 1)
 
-    def block_body(self, node: BiNode) -> int:
-        return 1
+    def block_body_bol(self, node: RoseData) -> Indent:
+        return children(node, 1) if node.bol else keep(node)
 
-    def rbrace(self, node: BiNode) -> int:
-        return -1
+    def case_clauses_bol(self, node: RoseData) -> IndentResult:
+        return children(node, 1) if node.bol else keep(node)
 
-    def rhs(self, node: BiNode) -> int:
-        return 1
-
-    def dot(self, node: BiNode) -> int:
-        return 0 if node.parent.rule == "applyExprChain" else 1
+    def apply_expr_chain_bol(self, node: RoseData) -> IndentResult:
+        return from_here(node, 1)
 
 
 class Indenter(IndenterBase):

@@ -3,7 +3,6 @@ from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter
-from tubbs.formatter.tree import bi_node
 from tubbs.formatter.breaker import DictBreaker
 from tubbs.formatter.indenter import DictIndenter
 
@@ -51,18 +50,33 @@ val_target2 = '''val x = a
 '''
 
 
+broken_apply = '''val a =
+  foo
+    .map {
+      case a =>
+        a
+    }'''
+
+def_def = '''def foo = {
+  a match {
+    case b => { foo }
+    case _ => 1
+  }
+}'''
+
+
 class FormattingFacadeSpec:
 
-#     break a scala def
-#     with default rules $scala_def_default
-#     with custom rules in a dict $scala_def_dict
+    '''formatting facade
 
-#     break a scala val
-#     with default rules $scala_val_default
-
-    ''' formatting facade
-    map test $map_tree
+    broken apply expression with case clauses $broken_apply
     '''
+    # break a scala def
+    # with default rules $scala_def_default
+    # with custom rules in a dict $scala_def_dict
+
+    # break a scala val
+    # with default rules $scala_val_default
 
     def setup(self) -> None:
         def_content = load_fixture('format', 'scala', 'file1.scala')
@@ -87,6 +101,9 @@ class FormattingFacadeSpec:
     def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
         result = facade.format(lines, (9, 10)) / _.lines
+        print(result.fatal.join_lines)
+        print('---')
+        print(target)
         return k(result).must(contain(Lists.lines(target)))
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:
@@ -125,25 +142,11 @@ class FormattingFacadeSpec:
         # result = facade.format(List.lines(val_target2), (0, 1)) / _.lines
         return k(1) == 1
 
-    def map_tree(self) -> Expectation:
-        l = '''\
-val a =
-  foo
-    .map {
-      case a =>
-        a
-    }'''
-        ast = self.parser.parse(l, 'valVarDef').get_or_raise
+    def broken_apply(self) -> Expectation:
+        ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
         ind = Indenter(2)
         r = ind.format(ast)
-        print(r)
-        # b = bi_node('root', ast, ast)
-        # print(b)
-        # print(b.show)
-        # b1 = b.map(lambda a: (a, a.line))
-        # print(b1.show)
-        # print(ast.line_nodes)
-        # a1 = ast.filter()
-        return k(1) == 1
+        v = r.attempt / _.join_lines
+        return k(v).must(contain(broken_apply))
 
 __all__ = ('FormattingFacadeSpec',)

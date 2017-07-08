@@ -1,5 +1,5 @@
 import abc
-from typing import Union, TypeVar, Generic, Tuple, cast, Any
+from typing import Union, TypeVar, Generic, Tuple, cast, Any, Callable
 
 from tatsu.ast import AST
 from tatsu.infos import LineInfo, ParseInfo
@@ -8,11 +8,15 @@ from hues import huestr
 
 from toolz import dissoc, valfilter
 
-from ribosome.record import Record, str_field, int_field
+from ribosome.record import Record, str_field, int_field, field
 
-from amino import List, Empty, _, Maybe, Either, Left, Right, Just, Map, Boolean, LazyList
-from amino.tree import Node, ListNode, MapNode, LeafNode, SubTree, SubTreeValid, SubTreeLeaf, Inode
+from amino import List, _, Maybe, Either, Right, Map, Boolean, LazyList, L
+from amino.tree import Node, ListNode, MapNode, LeafNode, Inode
 from amino.list import Lists
+from amino.bi_rose_tree import RoseTree, BiRoseTree
+from amino.func import dispatch
+from amino.lazy_list import LazyLists
+from amino.boolean import true, false
 
 
 def indent(strings: Union[str, List[str]]) -> List[str]:
@@ -51,6 +55,10 @@ class Line(Record):
     def _str_extra(self) -> List[Any]:
         return List(self.lnum, self.start, self.length, self.show_text)
 
+    @property
+    def trim(self) -> str:
+        return self.text.strip()
+
 
 Sub = TypeVar('Sub')
 
@@ -86,7 +94,7 @@ class AstElem(Generic[Sub], Node[str, Sub]):
         return self.line.length
 
     @property
-    def line_num(self) -> int:
+    def lnum(self) -> int:
         return self.line.lnum
 
     @abc.abstractproperty
@@ -101,13 +109,13 @@ class AstElem(Generic[Sub], Node[str, Sub]):
     def pos_with_ws(self) -> int:
         ...
 
-    @property
+    @abc.abstractproperty
     def indent(self) -> int:
-        return self.line.indent
+        ...
 
-    @property
+    @abc.abstractproperty
     def col(self) -> int:
-        return self.pos - self.line.start
+        ...
 
     @property
     def endcol(self) -> int:
@@ -117,9 +125,9 @@ class AstElem(Generic[Sub], Node[str, Sub]):
     def is_bol(self) -> Boolean:
         return Boolean(self.col == self.indent)
 
-    @property
+    @abc.abstractproperty
     def is_eol(self) -> Boolean:
-        return Boolean(self.line_length == self.endcol)
+        ...
 
     @abc.abstractproperty
     def k(self) -> List[str]:
@@ -129,20 +137,55 @@ class AstElem(Generic[Sub], Node[str, Sub]):
     def is_newline(self) -> bool:
         return isinstance(self, AstToken) and self.text == '\n'
 
+    @abc.abstractproperty
+    def short(self) -> str:
+        ...
+
+    @abc.abstractproperty
+    def is_rule_node(self) -> bool:
+        ...
+
 
 class AstInode(Generic[Sub], Inode[str, Sub], AstElem[Sub]):
-
-    @abc.abstractmethod
-    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
-        ...
 
     @property
     def with_ws(self) -> str:
         return self.text
 
+    def _sub_ref_int(self, attr: Callable[[AstElem], Maybe[int]]) -> int:
+        return self.sub_l.head / attr | -1
+
     @property
     def pos_with_ws(self) -> int:
-        return self.sub_l.head / _.pos_with_ws | self.pos
+        return self._sub_ref_int(_.pos_with_ws)
+
+    @property
+    def pos(self) -> int:
+        return self._sub_ref_int(_.pos)
+
+    @property
+    def col(self) -> int:
+        return self._sub_ref_int(_.col)
+
+    @property
+    def indent(self) -> int:
+        return self._sub_ref_int(_.indent)
+
+    @abc.abstractproperty
+    def start_line(self) -> Line:
+        ...
+
+    @property
+    def line(self) -> Line:
+        return self.sub_l.head / _.line | self.start_line
+
+    @property
+    def ws_count(self) -> int:
+        return self._sub_ref_int(_.ws_count)
+
+    @property
+    def is_eol(self) -> Boolean:
+        return self.sub_l.last / _.is_eol | false
 
 
 class AstList(ListNode[str], AstInode[LazyList[Node[str, Any]]]):
@@ -157,26 +200,18 @@ class AstList(ListNode[str], AstInode[LazyList[Node[str, Any]]]):
         return self._rule
 
     @property
-    def pos(self) -> int:
-        return self.head.e / _.pos | -1
-
-    @property
     def endpos(self) -> int:
         return self.last.e / _.endpos | -1
 
     @property
-    def line(self) -> Line:
+    def start_line(self) -> Line:
         return self._line
 
-    def replace(self, data: List[AstElem]) -> 'AstList':
-        return AstList(data, self._rule, self.line)
+    def replace(self, data: LazyList[AstElem]) -> 'AstList':
+        return type(self)(data, self._rule, self.line)
 
     def cat(self, elem: AstElem) -> 'AstList':
         return self.replace(self.data.cat(elem))
-
-    @property
-    def ws_count(self) -> int:
-        return self.head.e / _.ws_count | 0
 
     def __str__(self) -> str:
         return '{}({}, {})'.format(self.__class__.__name__, self.rule, self.data.join_comma)
@@ -195,13 +230,6 @@ class AstList(ListNode[str], AstInode[LazyList[Node[str, Any]]]):
             .cons('[{}]'.format(huestr(self.rule).red.colorized))
         )
 
-    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
-        return (
-            self.sub.find(_.key == name)
-            .to_either('{} not in {}'.format(name, self)) /
-            _.range
-        )
-
     @property
     def text(self) -> str:
         return (self.sub / _.with_ws).mk_string()
@@ -209,6 +237,21 @@ class AstList(ListNode[str], AstInode[LazyList[Node[str, Any]]]):
     @property
     def _desc(self) -> str:
         return f'[{self.rule}]'
+
+    @property
+    def short(self) -> str:
+        sub = self.sub.map(_.rule).join_comma
+        return f'{self.__class__.__name__}({self.rule}, {sub})'
+
+    @property
+    def is_rule_node(self) -> bool:
+        return Boolean(not isinstance(self, AstClosure))
+
+
+class AstClosure(AstList):
+    ''' Closures are sublists of rules and cannot be top level.
+    '''
+    pass
 
 
 class AstInternal(Map):
@@ -233,6 +276,10 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
         return AstMap(AstInternal(valfilter(filt, dissoc(ast, 'parseinfo')), ast.parseinfo))
 
     @property
+    def sub_l(self) -> LazyList[Node[AstElem, Any]]:
+        return LazyList(self.sub.v.sort_by(_.pos))
+
+    @property
     def ast(self) -> AstInternal:
         return self.data
 
@@ -253,8 +300,12 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
         return self.info.endpos
 
     @property
-    def line(self) -> Line:
+    def start_line(self) -> Line:
         return Line.from_line_info(self.info.buffer.line_info(self.pos))
+
+    @property
+    def end_line(self) -> Line:
+        return Line.from_line_info(self.info.buffer.line_info(self.endpos))
 
     def get(self, key: str, default: AstElem=None) -> Union[None, AstElem]:
         return dict.get(self, key, default)
@@ -300,9 +351,6 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
     def lines(self) -> List[str]:
         return List.lines(self.with_ws)
 
-    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
-        return self.lift(name).e / _.range
-
     @property
     def k(self) -> List[str]:
         return List.wrap(self.data.keys())
@@ -313,6 +361,32 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
 
     def replace(self, data: Map[str, AstElem]) -> 'AstMap':
         return AstMap(AstInternal(data, self.ast.info))
+
+    @property
+    def short(self) -> str:
+        keys = self.ast.k.join_comma
+        return f'AstMap({self.rule}: {keys})'
+
+    @property
+    def boundary_nodes(self) -> AstElem:
+        def filt(node: Node) -> bool:
+            return node.is_bol or node.is_eol
+        return self.filter_not(_.is_newline).filter(filt)
+
+    @property
+    def eols(self) -> List[int]:
+        folder = lambda z, a: z.cons((z.head | 0) + len(a) + 1)
+        return self.lines.detach_head.map2(lambda h, t: t.fold_left(List(len(h)))(folder).reversed) | List()
+
+    @property
+    def bols(self) -> List[int]:
+        ''' add 1 for the newline byte
+        '''
+        return self.lines.fold_left(List(0))(lambda z, a: z.cat((z.last | 0) + 1 + len(a)))
+
+    @property
+    def is_rule_node(self) -> Boolean:
+        return true
 
 
 class AstToken(LeafNode[str], AstElem[None]):
@@ -345,6 +419,14 @@ class AstToken(LeafNode[str], AstElem[None]):
         return self.pos + len(self.raw)
 
     @property
+    def col(self) -> int:
+        return self.pos - self.line.start
+
+    @property
+    def indent(self) -> int:
+        return self.line.indent
+
+    @property
     def line(self) -> Line:
         return self._line
 
@@ -354,7 +436,7 @@ class AstToken(LeafNode[str], AstElem[None]):
     def __repr__(self) -> str:
         raw = '\\n' if self.raw == '\n' else self.raw
         return '{}({}, {}, {}, {}, {})'.format(
-            self.__class__.__name__, self.rule, raw, self.pos, self.line_num, self.ws_count)
+            self.__class__.__name__, self.rule, raw, self.pos, self.lnum, self.ws_count)
 
     @property
     def whitespace(self) -> str:
@@ -363,9 +445,6 @@ class AstToken(LeafNode[str], AstElem[None]):
     @property
     def _keytree(self) -> List[str]:
         return List('{} -> {}'.format(huestr(self.rule).red.colorized, huestr(self.raw).green.colorized))
-
-    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
-        return Right(self.range)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -383,85 +462,144 @@ class AstToken(LeafNode[str], AstElem[None]):
     def k(self) -> List[str]:
         return List(self.key)
 
+    @property
+    def short(self) -> str:
+        return str(self)
+
+    @property
+    def is_rule_node(self) -> Boolean:
+        return false
+
+    @property
+    def is_eol(self) -> Boolean:
+        return Boolean(self.line_length == self.endcol)
+
 A = TypeVar('A')
 
 
-class SubAst(SubTree):
+class RoseData(Record):
+    key = str_field()
+    ast = field(AstElem)
+    parent = field(RoseTree)
 
-    # @staticmethod
-    # def cons(data, key: str, rule: str) -> 'SubAst':
-    #     cons = dispatch_with({AstMap: SubAstMap, AstList: SubAstList, AstToken: SubAstToken})
-    #     return cons(data)
+    def cons(key: str, ast: AstElem, parent: RoseTree) -> 'RoseData':
+        return RoseData(key=key, ast=ast, parent=parent)
 
-    # @staticmethod
-    # def from_maybe(data: Maybe[AstElem], key: str, rule: str, err: str):
-    #     return data.cata(
-    #         L(SubAstValid.cons)(_, key, rule),
-    #         SubAstInvalid(key, rule, err)
-    #     )
+    def __str__(self) -> str:
+        bol = ' bol' if self.bol else ''
+        eol = ' eol' if self.eol else ''
+        return f'{self.key}: {self.ast.short}{bol}{eol}'
 
-    # def cata(self, f: Callable[[AstElem], A], b: Union[A, Callable[[], A]]
-    #          ) -> A:
-    #     return (
-    #         f(self._data)
-    #         if isinstance(self, SubAstValid)
-    #         else call_by_name(b)
-    #     )
-
-    @abc.abstractproperty
-    def line(self) -> Maybe[int]:
-        ...
-
-    @property
-    def _no_token(self) -> str:
-        return 'ast is not a token'
-
-    @property
-    def raw(self) -> Either[str, str]:
-        return (
-            Right(self._data.raw)
-            if isinstance(self, SubTreeLeaf) else
-            Left(self._no_token)
-        )
-
-
-class SubAstValid(Generic[A], SubAst, SubTreeValid):
+    def __repr__(self) -> str:
+        return f'RoseData({str(self)})'
 
     @property
     def rule(self) -> str:
-        return self._data.rule
+        return self.ast.rule
 
     @property
-    def line(self) -> Maybe[int]:
-        return Just(self._data.line)
-
-
-class SubAstInvalid(SubAst):
-
-    def __init__(self, key: str, rule: str, reason: str) -> None:
-        super().__init__(key, reason)
-        self.rule = rule
-
-    def __str__(self) -> str:
-        s = 'SubAstInvalid({}, {}, {})'
-        return s.format(self.key, self.rule, self.reason)
+    def parent_rule(self) -> str:
+        return self.parent.data.rule
 
     @property
-    def _error(self) -> str:
-        return 'no sub ast `{}` in `{}`: {}'.format(self.key, self.rule, self.reason)
+    def desc(self) -> str:
+        return f'{self.rule}_{self.key}'
 
     @property
-    def _no_token(self) -> str:
-        return self._error
+    def is_token(self) -> bool:
+        return isinstance(self.ast, AstToken)
 
     @property
-    def line(self) -> Maybe[int]:
-        return Empty()
+    def line(self) -> int:
+        return self.ast.line
+
+    @property
+    def bol(self) -> Boolean:
+        return self.ast.is_bol
+
+    @property
+    def eol(self) -> Boolean:
+        return self.ast.is_eol
+
+    @property
+    def indent(self) -> int:
+        return self.ast.indent
+
+    @property
+    def with_ws(self) -> str:
+        return self.ast.with_ws
+
+    @property
+    def ws_count(self) -> int:
+        return self.ast.ws_count
 
 
-def boundary_nodes(tree: AstMap) -> List[AstElem]:
-    def filt(node: Node) -> bool:
-        return node.is_bol or node.is_eol
-    return tree.filter_not(_.is_newline).filter(filt)
+class RoseAstTree(RoseTree[RoseData]):
 
-__all__ = ('SubAst', 'SubAstValid', 'SubAstInvalid', 'AstMap')
+    @property
+    def rule(self) -> str:
+        return self.data.rule
+
+    @property
+    def is_token(self) -> bool:
+        return self.data.is_token
+
+    @property
+    def range(self) -> Tuple[int, int]:
+        return self.data.ast.range
+
+    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
+        return Right(self.range) if self.is_token else self.sub_range_search(name)
+
+    def sub_range_search(self, name: str) -> Either[str, Tuple[int, int]]:
+        return (
+            self.sub.find(_.data.key == name)
+            .to_either('{} not in {}'.format(name, self)) /
+            _.range
+        )
+
+    @property
+    def pos(self) -> int:
+        return self.data.ast.pos
+
+    @property
+    def line(self) -> int:
+        return self.data.ast.line
+
+    @property
+    def ast(self) -> AstElem:
+        return self.data.ast
+
+
+class RoseAstElem(BiRoseTree[RoseData], RoseAstTree):
+    pass
+
+
+class AstRoseTreeConverter:
+
+    @staticmethod
+    def convert() -> Callable:
+        return dispatch(AstRoseTreeConverter(), List(AstMap, AstList, AstToken), 'convert_')
+
+    def rec(self, ast: AstElem) -> Callable:
+        return AstRoseTreeConverter.convert()(ast)
+
+    def convert_ast_token(self, ast: AstToken) -> Callable:
+        return lambda parent: LazyLists.empty()
+
+    def convert_ast_list(self, ast: AstList) -> Callable:
+        return lambda parent: ast.sub.map(
+            lambda a: RoseAstElem(RoseData.cons(parent.data.key, a, parent), parent, self.rec(a)))
+
+    def convert_ast_map(self, ast: AstMap) -> Callable:
+        def cons(key: str, node: AstElem, parent: RoseTree) -> RoseTree:
+            return RoseAstElem(RoseData.cons(key, node, parent), parent, self.rec(node))
+        return lambda parent: LazyList(ast.sub.to_list.sort_by(lambda a: a[1].pos)).map2(L(cons)(_, _, parent))
+
+
+def ast_rose_tree(ast: AstElem[Any]) -> RoseTree[AstElem[Any]]:
+    convert = AstRoseTreeConverter.convert()
+    return RoseAstTree(RoseData.cons('root', ast, RoseTree(ast, LazyLists.empty())), convert(ast))
+
+__all__ = ('indent', 'Line', 'AstElem', 'AstInode', 'AstList', 'AstMap', 'AstToken', 'RoseData', 'RoseAstTree',
+           'RoseAstElem', 'ast_rose_tree')

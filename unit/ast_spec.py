@@ -5,11 +5,12 @@ from kallikrein import Expectation, k, unsafe_k
 from kallikrein.matchers.either import be_right
 from kallikrein.matchers import contain
 from kallikrein.expectable import Expectable
-from amino import _, Either, Path
+from amino import _, Either, Path, __
 
 from tubbs.tatsu.base import BuiltinParser
-from tubbs.formatter.tree import Tree
-from tubbs.tatsu.ast import AstElem
+from tubbs.tatsu.ast import AstElem, ast_rose_tree
+
+from unit._support.ast import be_token
 
 
 class Parser(BuiltinParser):
@@ -55,54 +56,50 @@ class AstSpec:
     def token_position(self) -> Expectation:
         data = 'tok foo bar'
         ast = self.ast(data, 'ids')
-        tok1 = ast.l._data
-        tok2 = ast.r._data
+        tok1 = ast.s.l.data
+        tok2 = ast.s.r.data
         return (k(tok1.pos) == 4) & (k(tok2.pos) == 8) & (k(tok2.endpos) == 11)
 
     def list_range(self) -> Expectation:
         clos = ', bar, zam'
         data = 'tok(foo{})'.format(clos)
         ast = self.ast(data, 'call')
-        start, end = ast.rest._data.range
-        tree = Tree(ast)
+        start, end = ast.s.rest.data.range
+        tree = ast_rose_tree(ast)
         return (
             (k(start) == 7) &
             (k(end) == 17) &
-            (k(tree.root.sub[3].text) == clos)
+            (k(tree.sub[3].data.ast.text) == clos)
         )
 
     def positive_closure(self) -> Expectation:
         data = 'tok: foo bar baz'
         ast = self.ast(data, 'poswrap')
-        return k(ast.clos.id.last.raw).must(contain('baz'))
+        return k(ast.s.clos.id.last).must(be_token('baz'))
 
     def whitespace(self) -> Expectation:
         i = 4
         ws = ' ' * i
         data = '{}tok: foo,  bar,baz'.format(ws)
         ast = self.ast(data, 'ws')
-        tree = Tree(ast)
-        root = tree.root
-        args = (root.sub.last / _.sub).x
-        def indent(i: int) -> Expectable:
-            return k(args.lift(i) / _.indent)
+        tree = ast_rose_tree(ast)
+        args = tree.sub.last / _.sub
+        def ws_count(i: int) -> Expectable:
+            return k(args.flat_map(__.lift(i)) / _.data.ws_count)
         return (
-            (k(root.indent) == i) &
-            (indent(0).must(contain(1))) &
-            (indent(1).must(contain(0))) &
-            (indent(2).must(contain(2))) &
-            (indent(3).must(contain(0))) &
-            (indent(4).must(contain(0))) &
-            (k(root.with_ws) == data)
+            (k(tree.data.ws_count) == i) &
+            (ws_count(0).must(contain(1))) &
+            (ws_count(1).must(contain(0))) &
+            (k(tree.data.with_ws) == data)
         )
 
     def lines(self) -> Expectation:
         data = '{tok(a)\ntok(b)}'
         ast = self.ast(data, 'stats')
         return (
-            k(ast.head.line).must(contain(0)) &
-            k(ast.tail.head.line).must(contain(1)) &
-            k(ast.tail[1].first.line).must(contain(1))
+            k(ast.s.head.e.map(_.lnum)).must(contain(0)) &
+            k(ast.s.tail.head.e.map(_.lnum)).must(contain(0)) &
+            k(ast.s.tail[1].first.e.map(_.lnum)).must(contain(1))
         )
 
 __all__ = ('AstSpec',)

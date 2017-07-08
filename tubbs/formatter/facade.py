@@ -1,9 +1,8 @@
 from typing import Tuple
 
-from amino import List, Either, L, _, Maybe
+from amino import List, Either, L, _, Maybe, Task
 
 from tubbs.logging import Logging
-from tubbs.formatter.tree import Tree
 from tubbs.formatter.base import Formatter
 from tubbs.tatsu.base import ParserBase
 from tubbs.hints.base import HintsBase
@@ -30,25 +29,23 @@ class FormattingFacade(Logging):
         start, end = rng
         crawler = Crawler(context, start, self.parser, self.hints)
         result = crawler.parsable_range
-        return result.map(_.rule).zip(result.flat_map(_.range))
+        return result.map(_.rule).zip(result.map(_.range))
 
-    def format(self, context: List[str], rng: Range) -> Either[str, Formatted]:
+    def format(self, context: List[str], rng: Range) -> Task[Formatted]:
         return (
             self.parsable_range(context, rng)
-            .map2(L(self.format_range)(_, context, _))
+            .flat_map2(L(self.format_range)(_, context, _))
         )
 
-    def format_range(self, rule: str, context: List[str], rng: Range) -> Formatted:
+    def format_range(self, rule: str, context: List[str], rng: Range) -> Task[Formatted]:
         lines = context.slice(*rng)
         format_with = L(self.format_with)(rule, _, _)
-        return Formatted(self.formatters.fold_left(lines)(format_with), rng)
+        return self.formatters.fold_m(Task.now(lines))(format_with) / L(Formatted)(_, rng)
 
-    def format_with(self, rule: str, lines: List[str], formatter: Formatter) -> List[str]:
+    def format_with(self, rule: str, lines: List[str], formatter: Formatter) -> Task[List[str]]:
         return (
-            self.parser.parse(lines.join_lines, rule) /
-            Tree //
-            formatter.format |
-            lines
+            self.parser.parse(lines.join_lines, rule) //
+            formatter.format
         )
 
 __all__ = ('FormattingFacade',)

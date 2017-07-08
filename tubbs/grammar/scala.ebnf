@@ -319,8 +319,8 @@ oneComponentExpr =
   | wildcard
   | this
   ;
-applyMethodApp = dot:'.' meth:applyExprMethod;
-applyExprChain = [nl:nl] meths:{applyMethodApp} argss:{argListExpr}+;
+applyMethodApp = [nl:nl] dot:'.' meth:applyExprMethod;
+applyExprChain = meths:{applyMethodApp} argss:{argListExpr}+;
 applyExpr = pre:oneComponentExpr app:{applyExprChain}+;
 simpleExpr1 =
   | literal

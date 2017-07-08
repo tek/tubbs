@@ -1,19 +1,19 @@
 import abc
 
-from amino import Either, List, Map
+from amino import List, Map, Task
 
 from tubbs.logging import Logging
-from tubbs.formatter.tree import Tree
+from tubbs.tatsu.ast import AstElem
 
 
 class Formatter(Logging, abc.ABC):
 
     @abc.abstractmethod
-    def format(self, tree: Tree) -> Either[str, List[str]]:
+    def format(self, ast: AstElem) -> Task[List[str]]:
         ...
 
-    def __call__(self, tree: Tree) -> Either:
-        return self.format(tree)
+    def __call__(self, ast: AstElem) -> Task[List[str]]:
+        return self.format(ast)
 
 
 class VimFormatterMeta(abc.ABCMeta):

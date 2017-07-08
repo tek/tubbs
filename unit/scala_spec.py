@@ -1,16 +1,16 @@
-from amino import List, Either, Boolean
+from amino import List, Either, _
 from amino.test.path import load_fixture
-from amino.tree import SubTree, SubTreeLeaf, SubTreeValid
 
 from kallikrein import k, unsafe_k, pending
 from kallikrein.expectation import Expectation
 from kallikrein.matchers.either import be_left, be_right
 from kallikrein.matchers.length import have_length
-from kallikrein.matcher import Predicate, matcher, NestingUnavailable
 
 from tubbs.tatsu.scala import Parser
-from tubbs.tatsu.ast import AstMap, AstElem, AstToken
+from tubbs.tatsu.ast import AstMap
 from tubbs.logging import Logging
+
+from unit._support.ast import be_token, have_rule
 
 funname = List.random_alpha(5)
 
@@ -126,6 +126,12 @@ caseclause_arg = '''val a = b
 .map(fun)
 .collect { case c => d }'''
 
+boundary_apply_chain = '''val a =
+  b
+    .map(f1)
+    .map(f2)
+'''
+
 
 class ScalaSpecBase(Logging):
 
@@ -155,57 +161,6 @@ class ScalaSpecBase(Logging):
 
     def def_(self, text: str, target: str) -> AstMap:
         return self.ast(text, 'def', target)
-
-
-class BeToken:
-    pass
-
-
-class PredBeToken(Predicate):
-    pass
-
-
-class PredBeTokenSubTree(PredBeToken, tpe=SubTree):
-
-    def check(self, exp: SubTree, target: str) -> Boolean:
-        return Boolean(isinstance(exp, SubTreeLeaf) and exp.data.raw == target)
-
-
-class PredBeTokenAstElem(PredBeToken, tpe=AstElem):
-
-    def check(self, exp: AstElem, target: str) -> Boolean:
-        return Boolean(isinstance(exp, AstToken) and exp.raw == target)
-
-
-success = '`{}` is token `{}`'
-failure = '`{}` is not token `{}`'
-be_token = matcher(BeToken, success, failure, PredBeToken, NestingUnavailable)
-
-
-class HaveRule:
-    pass
-
-
-class PredHaveRule(Predicate):
-    pass
-
-
-class PredHaveRuleSubTree(PredHaveRule, tpe=SubTree):
-
-    def check(self, exp: SubTree, target: str) -> Boolean:
-        return Boolean(isinstance(exp, SubTreeValid) and exp.data.rule == target)
-
-
-class PredHaveRuleAstElem(PredHaveRule, tpe=AstElem):
-
-    def check(self, exp: AstElem, target: str) -> Boolean:
-        print(exp)
-        return Boolean(exp.rule == target)
-
-
-success = '`{}` has rule `{}`'
-failure = '`{}` does not have rule `{}`'
-have_rule = matcher(HaveRule, success, failure, PredHaveRule, NestingUnavailable)
 
 
 class ScalaSpec(ScalaSpecBase):
@@ -283,6 +238,7 @@ class ScalaSpec(ScalaSpecBase):
     multiline expression with newline before method call $multiline_expr
     multiline valdef with newline before method call $multiline_val
     case clauses as argument to a method call $caseclause_arg
+    boundary node status for apply chains $apply_chain_boundary
     '''
 
     def keyword(self) -> Expectation:
@@ -641,6 +597,10 @@ class ScalaSpec(ScalaSpecBase):
     def caseclause_arg(self) -> Expectation:
         ast = self.def_(caseclause_arg, 'valVarDef')
         return k(ast.s.def_.rhs.app.last.argss.head.body.head.rhs).must(be_token('d'))
+
+    def apply_chain_boundary(self) -> Expectation:
+        ast = self.def_(boundary_apply_chain, 'valVarDef')
+        return k(ast.s.def_.rhs.app.e / _.is_bol).must(be_right(True))
 
 stat = '''\
 '''

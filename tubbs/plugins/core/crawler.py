@@ -1,3 +1,5 @@
+from typing import Tuple, Any
+
 from ribosome.record import Record, field, str_field
 
 from tubbs.tatsu.base import ParserBase
@@ -16,57 +18,48 @@ class StartMatch(Record):
     hint = field(HintMatch)
 
     @property
-    def _str_extra(self):
+    def _str_extra(self) -> List[Any]:
         return List(self.ident, self.rule, self.ast)
 
     @property
-    def parseinfo(self):
-        return Maybe.check(self.ast.parseinfo) / __._asdict() / Map | Map()
+    def info(self) -> Map:
+        return Maybe.check(self.ast.info) / __._asdict() / Map | Map()
 
     @property
-    def line(self):
+    def line(self) -> int:
         return self.hint.line
 
     @property
-    def start(self):
-        return self.parseinfo.lift('line') / (_ + self.line)
+    def start(self) -> int:
+        return self.ast.start_line.lnum + self.line
 
     @property
-    def start1(self):
+    def start1(self) -> int:
         ''' first line of the match in 1-based indexing for vim
         '''
-        return self.start / (_ + 1)
+        return self.start + 1
 
     @property
-    def end(self):
-        return self.parseinfo.lift('endline') / (_ + self.line)
+    def end(self) -> int:
+        return self.ast.end_line.lnum + self.line
 
     @property
-    def end1(self):
+    def end1(self) -> int:
         ''' last line of the match in 1-based indexing for vim
         '''
-        return self.end / (_ + 1)
+        return self.end + 1
 
     @property
-    def range(self) -> Either:
-        return (
-            (self.start & (self.end / (_ + 1)))
-            .to_either('{} has no range'.format(self))
-        )
+    def range(self) -> Tuple[int, int]:
+        return self.start, self.end + 1
 
     @property
-    def range1(self) -> Either:
-        return (
-            (self.start1 & self.end1)
-            .to_either('{} has no range1'.format(self))
-        )
+    def range1(self) -> Tuple[int, int]:
+        return self.start1, self.end1
 
     @property
-    def range_inclusive(self) -> Either:
-        return (
-            (self.start & self.end)
-            .to_either('{} has no range'.format(self))
-        )
+    def range_inclusive(self) -> Tuple[int, int]:
+        return self.start, self.end
 
 
 class Crawler(Logging):

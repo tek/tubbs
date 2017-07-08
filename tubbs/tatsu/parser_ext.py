@@ -9,17 +9,27 @@ from tatsu.contexts import closure, tatsumasu
 import regex
 
 import amino
-from amino import L, _, List
+from amino import L, _, List, LazyList
 from amino.lazy import lazy
 from amino.func import dispatch
 from amino.list import flatten
 
 from tubbs.logging import Logging
-from tubbs.formatter.tree import flatten_list
-from tubbs.tatsu.ast import AstMap, AstToken, AstList, AstElem, Line
+from tubbs.tatsu.ast import AstMap, AstToken, AstList, AstElem, Line, AstClosure
 
 
 AstData = Union[str, list, AstList, AstMap, AstToken, closure, None]
+
+
+def flatten_list(data: AstElem) -> List:
+    def flat(data: AstElem) -> List:
+        l = data.sub.drain if isinstance(data, AstList) else data
+        return (
+            flatten(map(flat, l))
+            if isinstance(l, list) else
+            [l]
+        )
+    return List.wrap(flat(data))
 
 
 def check_list(l: Any, rule: str) -> None:
@@ -55,13 +65,13 @@ class PostProc:
         return AstToken(raw, parser._last_pos, parser._line, rule, parser._take_ws())
 
     def wrap_list(self, raw: list, parser: 'ParserExt', rule: str) -> AstElem:
-        return AstList(process_list(raw), rule, parser._line)
+        return AstList(LazyList(process_list(raw)), rule, parser._line)
 
     def wrap_ast_list(self, ast: AstList, parser: 'ParserExt', rule: str) -> AstElem:
         return ast
 
     def wrap_closure(self, raw: closure, parser: 'ParserExt', rule: str) -> AstElem:
-        return self.wrap_list(raw, parser, rule)
+        return AstClosure(LazyList(process_list(raw)), rule, parser._line)
 
     def wrap_ast_map(self, ast: AstMap, parser: 'ParserExt', rule: str) -> AstElem:
         return ast
