@@ -17,6 +17,7 @@ from amino.bi_rose_tree import RoseTree, BiRoseTree
 from amino.func import dispatch
 from amino.lazy_list import LazyLists
 from amino.boolean import true, false
+from amino.lazy import lazy
 
 
 def indent(strings: Union[str, List[str]]) -> List[str]:
@@ -152,8 +153,12 @@ class AstInode(Generic[Sub], Inode[str, Sub], AstElem[Sub]):
     def with_ws(self) -> str:
         return self.text
 
+    @lazy
+    def _sub_ref(self) -> Maybe[AstElem]:
+        return self.sub_l.find(lambda a: not a.is_newline)
+
     def _sub_ref_int(self, attr: Callable[[AstElem], Maybe[int]]) -> int:
-        return self.sub_l.head / attr | -1
+        return self._sub_ref / attr | -1
 
     @property
     def pos_with_ws(self) -> int:
@@ -272,7 +277,7 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
     @staticmethod
     def from_ast(ast: AST) -> 'AstMap':
         def filt(a: Any) -> bool:
-            return a is not None and not a.empty
+            return a is not None and not a.empty and not a.is_newline
         return AstMap(AstInternal(valfilter(filt, dissoc(ast, 'parseinfo')), ast.parseinfo))
 
     @property
@@ -387,6 +392,10 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
     @property
     def is_rule_node(self) -> Boolean:
         return true
+
+    @property
+    def empty(self) -> Boolean:
+        return self.sub.empty
 
 
 class AstToken(LeafNode[str], AstElem[None]):

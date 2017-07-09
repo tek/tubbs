@@ -49,7 +49,7 @@ def process_list(data: Any) -> List:
             if isinstance(data, list) else
             [data]
         )
-    return List.wrap(loop(data))
+    return List.wrap(loop(data)).filter_not(_.empty)
 
 
 class PostProc:

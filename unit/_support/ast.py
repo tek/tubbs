@@ -48,7 +48,6 @@ class PredHaveRuleSubTree(PredHaveRule, tpe=SubTree):
 class PredHaveRuleAstElem(PredHaveRule, tpe=AstElem):
 
     def check(self, exp: AstElem, target: str) -> Boolean:
-        print(exp)
         return Boolean(exp.rule == target)
 
 

@@ -1,8 +1,7 @@
 import abc
 from typing import Callable, Any, Union, cast
 
-from amino import List, L, Right, Map, Left, Either, __, _, Maybe, Task
-from amino.util.string import snake_case
+from amino import List, L, Right, Map, Left, Either, __, _, Maybe, Task, Boolean
 from amino.list import Lists
 
 from ribosome.record import Record, int_field, field, list_field, bool_field
@@ -151,21 +150,10 @@ class IndenterBase(Formatter):
         ws = ' ' * ((shifts * self.shiftwidth) + baseline)
         return f'{ws}{line.trim}'
 
-    def lookup_handler(self, node: RoseData) -> Handler:
-        def handler(pre: str, suf: str) -> Maybe[Handler]:
-            name = f'{pre}_{suf}'
-            self.log.ddebug('trying ident handler {}'.format(name))
-            return self.handler(name).foreach(lambda a: self.log.ddebug('success'))
-        parent_rule = snake_case(node.parent_rule)
-        key_handler = '{}_{}'.format(parent_rule, node.key)
-        handlers = Lists.iff(node.ast.is_rule_node)(snake_case(node.rule)).cons(key_handler)
-        def handler_for(suf: str) -> Handler:
-            return handlers.find_map(lambda a: handler(a, suf))
-        return (
-            Maybe.iff_m(node.bol)(lambda: handler_for('bol'))
-            .o(Maybe.iff_m(node.eol)(lambda: handler_for('eol'))) |
-            (lambda: self.default_handler)
-        )
+    def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
+        def boundary(cond: Boolean, suf: str) -> List[str]:
+            return Lists.iff_l(node.bol)(lambda: names.map(lambda a: f'{a}_{suf}'))
+        return boundary(node.bol, 'bol') + boundary(node.eol, 'eol')
 
     def node_indent(self, node: RoseData) -> Either[str, Indent]:
         result = self.lookup_handler(node)(node)
@@ -194,7 +182,7 @@ class Indenter(IndenterBase):
         return Maybe.getattr(self.rules, name)
 
     @property
-    def default_handler(self) -> Callable[[RoseData], int]:
+    def default_handler(self) -> Callable[[RoseData], IndentResult]:
         return self.rules.default
 
 

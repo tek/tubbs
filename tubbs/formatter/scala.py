@@ -1,4 +1,4 @@
-from amino import Left, Either, List
+from amino import Left, Either, List, _
 from amino.util.string import snake_case
 
 from stevedore.example.base import FormatterBase
@@ -73,7 +73,7 @@ class ScalaBreakRules(BreakRules):
 
     def rbrace(self, state: BreakState) -> BreakData:
         def decide(state: BreakState) -> StrictBreakData:
-            opening_brace = state.node.parent.parent.data.ast.s.lbrace.brace.e
+            opening_brace = state.node.parent.data.ast.s.lbrace.e
             opening_break = state.parent_breaks.find(lambda a: opening_brace.contains(a.node.ast))
             force_break = opening_break.present or in_multi_line_block(state.node)
             return (1.0 if force_break else 0.3), 0.0
@@ -90,8 +90,6 @@ class ScalaBreakRules(BreakRules):
                 if rhs.rule.contains('block') and rhs.valid and lbrace else
                 0.8
             )
-            print(state.node.data.ast.short)
-            print(after)
             return 0.0, after
         return decide
 

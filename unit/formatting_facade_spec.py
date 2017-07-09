@@ -101,9 +101,6 @@ class FormattingFacadeSpec:
     def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
         result = facade.format(lines, (9, 10)) / _.lines
-        print(result.fatal.join_lines)
-        print('---')
-        print(target)
         return k(result).must(contain(Lists.lines(target)))
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:

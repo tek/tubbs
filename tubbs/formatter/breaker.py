@@ -3,12 +3,11 @@ from typing import Callable, Sized, Tuple, Any, Union, cast, Iterable
 
 from hues import huestr
 
-from amino import Either, List, L, Boolean, _, __, Maybe, Map, Empty, Task
-from amino.util.string import snake_case
+from amino import Either, List, L, Boolean, _, __, Maybe, Map, Task
 from amino.lazy import lazy
 from amino.regex import Regex
 
-from ribosome.record import Record, int_field, float_field, field, str_field, any_field
+from ribosome.record import Record, int_field, float_field, field
 from ribosome.nvim import NvimFacade
 from ribosome.util.callback import VimCallback
 
@@ -27,11 +26,6 @@ def only_ws(data: str) -> Boolean:
     return ws_re.match(data).present
 
 
-class BreakHandler(Record):
-    handler = any_field()
-    rule = str_field()
-
-
 SingleBreakData = Tuple[float, float]
 StrictBreakData = Union[List[SingleBreakData], SingleBreakData]
 
@@ -43,12 +37,15 @@ def is_break(a: Any) -> bool:
 class StrictBreak(Record):
     position = int_field()
     prio = float_field()
-    rule = str_field()
     node = field(RoseData)
 
     @property
     def _str_extra(self) -> List[Any]:
         return List(self.line, self.position, self.prio, self.rule)
+
+    @property
+    def rule(self) -> str:
+        return self.node.rule
 
     def match_name(self, name: str) -> bool:
         return name == self.rule
@@ -60,16 +57,15 @@ class StrictBreak(Record):
 
 class LazyBreakData:
 
-    def __init__(self, node: RoseAstTree, rule: str, f: Callable[[List['Break']], StrictBreakData]) -> None:
+    def __init__(self, node: RoseAstTree, f: Callable[[List['Break']], StrictBreakData]) -> None:
         self.node = node
-        self.rule = rule
         self.f = f
 
     def invoke(self, breaks: List[StrictBreak]) -> StrictBreakData:
         return self.f(BreakState(self.node, breaks))
 
     def brk(self, breaks: List[StrictBreak]) -> List[StrictBreak]:
-        return cons_breaks(self.node, self.rule, self.invoke(breaks))
+        return cons_breaks(self.node, self.invoke(breaks))
 
 
 BreakData = Union[StrictBreakData, LazyBreakData]
@@ -82,12 +78,13 @@ LazyBreakCallback = Callable[[List[Break]], StrictBreakData]
 
 
 BreakResult = Union[LazyBreakCallback, StrictBreakData]
+Handler = Callable[[RoseData], BreakResult]
 
 
-def cons_breaks(node: RoseAstTree, rule: str, result: BreakResult) -> List[Break]:
+def cons_breaks(node: RoseAstTree, result: BreakResult) -> List[Break]:
     data = node.data
     def mkbreak(position: int, prio: float) -> Maybe[StrictBreak]:
-        return Maybe.iff(prio > 0)(StrictBreak(position=position, prio=float(prio), rule=rule, node=data))
+        return Maybe.iff(prio > 0)(StrictBreak(position=position, prio=float(prio), node=data))
     def mkbreaks(before: int, after: int) -> Either[str, List]:
         start, end = node.range
         return List((start, before), (end, after)).flat_map2(mkbreak)
@@ -96,7 +93,7 @@ def cons_breaks(node: RoseAstTree, rule: str, result: BreakResult) -> List[Break
     return (
         cast(List[SingleBreakData], result) // mkbreakss
         if isinstance(result, List) else
-        List(LazyBreakData(node, rule, result))
+        List(LazyBreakData(node, result))
         if callable(result) else
         mkbreakss(result)
     )
@@ -174,12 +171,8 @@ class BreakerBase(Formatter):
     def __init__(self, textwidth: int) -> None:
         self.textwidth = textwidth
 
-    @abc.abstractmethod
-    def handler(self, node: RoseData, tmpl: str) -> Callable[[RoseData], BreakData]:
-        ...
-
     @abc.abstractproperty
-    def default_handler(self) -> Callable[[RoseData], BreakData]:
+    def default_handler(self) -> Handler:
         ...
 
     def format(self, ast: AstElem) -> Task[List[str]]:
@@ -211,7 +204,7 @@ class BreakerBase(Formatter):
             local_pos = pos - start
             self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
             left = cur[:local_pos]
-            right = cur[local_pos:]
+            right = cur[local_pos:].strip()
             self.log.ddebug(lambda: 'broke line into\n{}\n{}'.format(hl(left), hl(right)))
             return rec2(left, start) + rec2(right, pos)
         def rec0(brk: StrictBreak) -> Either[str, List[str]]:
@@ -228,23 +221,13 @@ class BreakerBase(Formatter):
         ).leffect(self.log.ddebug)
         return broken | List(cur)
 
-    def lookup_handler(self, node: RoseData) -> BreakHandler:
-        def handler(attr: str, or_else: Callable=lambda: Empty()) -> Maybe[BreakHandler]:
-            self.log.ddebug('trying break handler {}'.format(attr))
-            h = self.handler(node, attr) / L(BreakHandler.from_attr('handler'))(_, rule=attr)
-            if h.present:
-                self.log.ddebug('success')
-            return h.o(or_else)
-        rule = snake_case(node.rule)
-        return (
-            handler('{}_{}'.format(rule, node.key), L(handler)(rule, L(handler)(node.key))) |
-            BreakHandler(handler=self.default_handler, rule=rule)
-        )
-
     def handle(self, node: RoseAstTree, breaks: List[Break]) -> List[Break]:
         handler = self.lookup_handler(node.data)
-        result = handler.handler(BreakState(node.data, breaks))
-        return cons_breaks(node, handler.rule, result)
+        result = handler(BreakState(node.data, breaks))
+        return cons_breaks(node, result)
+
+    def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
+        return names
 
     def sub_breaks(self, node: RoseAstTree, breaks: List[Break]) -> Task[List[Break]]:
         return (
@@ -272,7 +255,7 @@ class Breaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: RoseData, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
+    def handler(self, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
         return Maybe.check(getattr(self.rules, attr, None))
 
     @property
@@ -286,7 +269,7 @@ class DictBreaker(BreakerBase):
         super().__init__(textwidth)
         self.rules = rules
 
-    def handler(self, node: RoseData, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
+    def handler(self, attr: str) -> Maybe[Callable[[RoseData], BreakData]]:
         return self.rules.lift(attr) / (lambda a: lambda node: a)
 
     @property
