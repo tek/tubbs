@@ -97,7 +97,7 @@ class BreakerBase(Formatter):
 
     def handle(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Either[str, List[StrictBreak]]:
         handler = self.lookup_handler(node.data)
-        result = handler(BreakState(node, breaks))
+        result = handler()
         return Right(List(CondBreak(node, result)))
 
     def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
