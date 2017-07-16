@@ -152,7 +152,7 @@ class IndenterBase(Formatter):
 
     def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
         def boundary(cond: Boolean, suf: str) -> List[str]:
-            return Lists.iff_l(node.bol)(lambda: names.map(lambda a: f'{a}_{suf}'))
+            return Lists.iff_l(cond)(lambda: names.map(lambda a: f'{a}_{suf}'))
         return boundary(node.bol, 'bol') + boundary(node.eol, 'eol')
 
     def node_indent(self, node: RoseData) -> Either[str, Indent]:
