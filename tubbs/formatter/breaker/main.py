@@ -53,11 +53,12 @@ class BreakerBase(Formatter):
             line, start = a
             state1, lines1 = self.break_line(state0, line, start)
             return state1.reset(state0), lines0 + lines1
-        return (
+        def trim(lines: List[str]) -> List[str]:
+            return lines.detach_head.map2(lambda h, t: t.map(__.strip()).cons(h.rstrip())) | lines
+        return trim(
             ast.lines
             .zip(ast.bols)
             .fold_left((breaks, List()))(folder)[1]
-            .map(__.rstrip())
         )
 
     def break_line(self, breaks: Breaks, cur: str, start: int) -> Tuple[Breaks, List[str]]:

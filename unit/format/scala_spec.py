@@ -130,7 +130,7 @@ class ScalaFormatSpec:
         nodes = self.broken_fun_ast.boundary_nodes
         return (
             k(nodes.s.defkw).must(be_token('def')) &
-            k(nodes.s.def_.rhs.body.head.def_.def_.rhs.cases.head.casekw).must(be_token('case')) &
+            k(nodes.s.def_.rhs.body.head.def_.def_.rhs.block.body.head.casekw).must(be_token('case')) &
             k(nodes.s.def_.rhs.rbrace.brace).must(be_token('}'))
         )
 

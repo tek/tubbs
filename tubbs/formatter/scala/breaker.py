@@ -13,6 +13,9 @@ from tubbs.formatter.breaker.conds import (multi_line_block, sibling, parent_rul
 
 class ScalaBreakRules(BreakRules):
 
+    def case_block_body(self, state: BreakState) -> BreakCond:
+        return inv(1.1).before
+
     def case_clause(self, state: BreakState) -> BreakCond:
         # TODO check parent; if more than one case is present, return 1.0, else 0.9
         # generalize multi_line_block

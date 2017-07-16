@@ -10,7 +10,7 @@ from toolz import dissoc, valfilter
 
 from ribosome.record import Record, str_field, int_field, field
 
-from amino import List, _, Maybe, Either, Right, Map, Boolean, LazyList, L
+from amino import List, _, Maybe, Map, Boolean, LazyList, L
 from amino.tree import Node, ListNode, MapNode, LeafNode, Inode, SubTree
 from amino.list import Lists
 from amino.bi_rose_tree import RoseTree, BiRoseTree
@@ -181,8 +181,16 @@ class AstInode(Generic[Sub], Inode[str, Sub], AstElem[Sub]):
         ...
 
     @property
+    def end_line(self) -> Line:
+        return self.sub_l.last / _.line | self.start_line
+
+    @property
     def line(self) -> Line:
         return self.sub_l.head / _.line | self.start_line
+
+    @property
+    def line_count(self) -> int:
+        return self.end_line.lnum - self.start_line.lnum
 
     @property
     def ws_count(self) -> int:
@@ -280,7 +288,7 @@ class AstMap(MapNode[str], AstInode[Map[str, AstElem]]):
             return a is not None and not a.empty and not a.is_newline
         return AstMap(AstInternal(valfilter(filt, dissoc(ast, 'parseinfo')), ast.parseinfo))
 
-    @property
+    @lazy
     def sub_l(self) -> LazyList[Node[AstElem, Any]]:
         return LazyList(self.sub.v.sort_by(_.pos))
 
@@ -564,16 +572,6 @@ class RoseAstTree(RoseTree[RoseData]):
     @property
     def range(self) -> Tuple[int, int]:
         return self.ast.range
-
-    def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
-        return Right(self.range) if self.is_token else self.sub_range_search(name)
-
-    def sub_range_search(self, name: str) -> Either[str, Tuple[int, int]]:
-        return (
-            self.sub.find(_.data.key == name)
-            .to_either('{} not in {}'.format(name, self)) /
-            _.range
-        )
 
     @property
     def pos(self) -> int:

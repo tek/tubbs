@@ -3,7 +3,7 @@ from typing import Callable
 from amino.tree import SubTree
 from amino import Boolean
 
-from tubbs.tatsu.ast import AstElem, AstList
+from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.cond import pred_cond, pred_cond_f, BreakCond, Invariant
 
@@ -16,9 +16,13 @@ def nel(ast: AstElem) -> bool:
     return isinstance(ast, AstList) and ast.data.length > 0
 
 
+def multi_line_node(n: RoseAstTree) -> Boolean:
+    return n.s.body.tail.e.exists(nel) or n.sub.exists(multi_line_node)
+
+
 @pred_cond('multi line block')
 def multi_line_block(state: BreakState) -> Boolean:
-    return state.parent.s.body.tail.e.exists(nel)
+    return multi_line_node(state.parent)
 
 
 @pred_cond_f('sibling break')

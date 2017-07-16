@@ -66,11 +66,11 @@ def_def = '''def foo = {
 class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
-    with default rules $scala_def_default
+    # with default rules $scala_def_default
     # with custom rules in a dict $scala_def_dict
 
     break a scala val
-    # with default rules $scala_val_default
+    with default rules $scala_val_default
 
     # broken apply expression with case clauses $broken_apply
     '''
@@ -131,11 +131,6 @@ class FormattingFacadeSpec:
 
     def scala_val_default(self) -> Expectation:
         return self.scala_val(self.default_formatters)
-
-    def scala_val_default2(self) -> Expectation:
-        # facade = self.facade(self.default_formatters)
-        # result = facade.format(List.lines(val_target2), (0, 1)) / _.lines
-        return k(1) == 1
 
     def broken_apply(self) -> Expectation:
         ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise

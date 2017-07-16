@@ -255,11 +255,11 @@ class ScalaSpec(ScalaSpecBase):
 
     def apply(self) -> Expectation:
         ast = self.expr('f(a)', 'applyExpr')
-        return k(ast.s.app.head.argss.head.args.head).must(be_token('a'))
+        return k(ast.s.app.head.head.args.head).must(be_token('a'))
 
     def apply_chain(self) -> Expectation:
         ast = self.expr('f.g(a)', 'applyExpr')
-        return k(ast.s.app.head.argss.head.args.head).must(be_token('a'))
+        return k(ast.s.app.chain.head.argss.head.args.head).must(be_token('a'))
 
     def apply_typeargs(self) -> Expectation:
         ast = self.expr('f.g.h[A, B](a)', 'applyExpr')

@@ -232,7 +232,7 @@ ascription = ':' infixType
   | ':' annotation {annotation}
   | ':' wildcard '*';
 
-patMat = scrutinee:simpleOrCompoundExpr match:match lbrace:lbrace cases:caseClauses rbrace:rbrace;
+patMat = scrutinee:simpleOrCompoundExpr match:match block:caseBlock;
 
 bindings = '(' [binding {',' binding}] ')';
 binding = (id | wildcard) [':' type];
@@ -319,9 +319,16 @@ oneComponentExpr =
   | wildcard
   | this
   ;
-applyMethodApp = [nl:nl] dot:'.' meth:applyExprMethod;
-applyExprChain = meths:{applyMethodApp} argss:{argListExpr}+;
-applyExpr = pre:oneComponentExpr app:{applyExprChain}+;
+applyMethod = [nl:nl] dot:'.' meth:applyExprMethod;
+applyExprArgss = {argListExpr}+;
+applyExprApp = meth:applyMethod argss:applyExprArgss;
+applyExprElem =
+  | applyExprArgss
+  | applyExprApp
+  | applyMethod
+  ;
+applyExprChain = {applyExprElem}+;
+applyExpr = pre:oneComponentExpr app:applyExprChain;
 simpleExpr1 =
   | literal
   | parenthesizedExprsExpr
@@ -593,13 +600,12 @@ blockStat =
   ;
 blockRest = eol:eol stat:blockStat;
 blockBody = head:blockStat tail:{blockRest} [eol result:resultExpr];
-blockExprContent =
-  | caseClauses
-  | blockBody
-  ;
-block = lbrace:lbrace body:blockExprContent rbrace:rbrace;
 statBlock = lbrace:lbrace body:blockBody rbrace:rbrace;
 caseBlock = lbrace:lbrace body:caseClauses rbrace:rbrace;
+block =
+  | caseBlock
+  | statBlock
+  ;
 
 classDef = id [typeParamClause] {constrAnnotation} [accessModifier] classParamClauses classTemplateOpt;
 traitDef = [nl] id [nl] [typeParamClause] [nl] traitTemplateOpt;

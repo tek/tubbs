@@ -76,6 +76,12 @@ class Invalid(Incomplete):
     def prio(self, prio: float) -> BreakInfo:
         return self
 
+    def __str__(self) -> str:
+        return f'Invalid({self.error})'
+
+    def __repr__(self) -> str:
+        return str(self)
+
 
 class HasPrio:
 
