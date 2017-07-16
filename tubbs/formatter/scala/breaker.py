@@ -8,18 +8,17 @@ from tubbs.formatter.breaker.cond import BreakCond
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.conds import (multi_line_block, sibling, parent_rule, sibling_rule, sibling_valid, after,
-                                           inv)
+                                           inv, multi_line_block_for)
 
 
 class ScalaBreakRules(BreakRules):
 
     def case_block_body(self, state: BreakState) -> BreakCond:
-        return inv(1.1).before
+        return (multi_line_block.prio(1.1) | inv(0.91)).before
 
+    # TODO __.parent_with_rule('caseBlock')
     def case_clause(self, state: BreakState) -> BreakCond:
-        # TODO check parent; if more than one case is present, return 1.0, else 0.9
-        # generalize multi_line_block
-        return inv(1.0).before
+        return (multi_line_block_for(_.parent.parent.parent.parent).prio(1.0) | inv(0.9)).before
 
     def param_clause(self, state: BreakState) -> BreakCond:
         return inv(0.7).before
@@ -28,10 +27,10 @@ class ScalaBreakRules(BreakRules):
         return inv(0.75).before
 
     def block_body(self, state: BreakState) -> BreakCond:
-        return inv(0.9).before
+        return inv(0.8).before
 
     def block_rest_stat(self, state: BreakState) -> BreakCond:
-        return inv(0.9).before
+        return inv(0.8).before
 
     def seminl_semi(self, state: BreakState) -> BreakCond:
         return inv(1.1).after

@@ -20,9 +20,14 @@ def multi_line_node(n: RoseAstTree) -> Boolean:
     return n.s.body.tail.e.exists(nel) or n.sub.exists(multi_line_node)
 
 
-@pred_cond('multi line block')
+@pred_cond('multi line block sibling')
 def multi_line_block(state: BreakState) -> Boolean:
     return multi_line_node(state.parent)
+
+
+@pred_cond_f('multi line block')
+def multi_line_block_for(state: BreakState, attr: Callable[[RoseAstTree], RoseAstTree]) -> Boolean:
+    return multi_line_node(attr(state.node))
 
 
 @pred_cond_f('sibling break')
@@ -49,4 +54,5 @@ def sibling_valid(state: BreakState, attr: Callable[[SubTree], SubTree]) -> Call
 def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
     return state.after(rule)
 
-__all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after')
+__all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after',
+           'multi_line_block_for')

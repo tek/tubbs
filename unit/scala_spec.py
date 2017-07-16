@@ -259,7 +259,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def apply_chain(self) -> Expectation:
         ast = self.expr('f.g(a)', 'applyExpr')
-        return k(ast.s.app.chain.head.argss.head.args.head).must(be_token('a'))
+        return k(ast.s.app.head.argss.head.args.head).must(be_token('a'))
 
     def apply_typeargs(self) -> Expectation:
         ast = self.expr('f.g.h[A, B](a)', 'applyExpr')
@@ -268,7 +268,7 @@ class ScalaSpec(ScalaSpecBase):
     def apply_string_literal(self) -> Expectation:
         word = List.random_alpha()
         ast = self.expr('foo("{}")'.format(word), 'applyExpr')
-        return k(ast.s.app.head.argss.head.args.head['data']).must(be_token(word))
+        return k(ast.s.app.head.head.args.head['data']).must(be_token(word))
 
     def fundef(self) -> Expectation:
         ast = self.stat(fundef, 'templateStatDef')
@@ -333,13 +333,13 @@ class ScalaSpec(ScalaSpecBase):
     def patmat(self) -> Expectation:
         ast = self.ast(patmat, 'patMat')
         return (
-            k(ast.s.cases.tail.head.case.pat.head).must(be_token('_')) &
-            k(ast.s.cases.tail.head.case.rhs.head).must(be_token('3'))
+            k(ast.s.block.body.tail.head.case.pat.head).must(be_token('_')) &
+            k(ast.s.block.body.tail.head.case.rhs.head).must(be_token('3'))
         )
 
     def patmat_assign(self) -> Expectation:
         ast = self.ast(patmat_assign, 'patVarDef')
-        cases = ast.s.def_.rhs.cases
+        cases = ast.s.def_.rhs.block.body
         case1 = cases.head
         case2 = cases.tail.head.case
         return (
@@ -388,7 +388,7 @@ class ScalaSpec(ScalaSpecBase):
     def argument_assign(self) -> Expectation:
         ast = self.ast(argument_assign, 'templateBody')
         rhs = ast.s.stats.head.body.head.def_.def_.rhs
-        return k(rhs.app.head.argss.head.args.head.rhs).must(be_token('true'))
+        return k(rhs.app.head.head.args.head.rhs).must(be_token('true'))
 
     def select(self) -> Expectation:
         ast = self.ast('a.b.c', 'path')
@@ -397,7 +397,7 @@ class ScalaSpec(ScalaSpecBase):
     def argument_select(self) -> Expectation:
         ast = self.ast(argument_select, 'templateBody')
         rhs = ast.s.stats.head.body.head.def_.def_.rhs
-        return k(rhs.app.head.argss.head.args.head.tail.head.id).must(be_token('b'))
+        return k(rhs.app.head.head.args.head.app.head.meth).must(be_token('b'))
 
     def import_(self) -> Expectation:
         ast = self.ast('one.two.three', 'importExpr')
@@ -405,7 +405,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def literal_attr(self) -> Expectation:
         ast = self.ast('"i".a', 'simpleOrCompoundExpr')
-        return k(ast.s.tail.last.id).must(be_token('a'))
+        return k(ast.s.app.head.meth).must(be_token('a'))
 
     def literal_apply_args(self) -> Expectation:
         ast = self.ast('"i".a(1)', 'simpleOrCompoundExpr')
@@ -413,7 +413,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def literal_apply_args_as_arg(self) -> Expectation:
         ast = self.ast('f("i".a(1))', 'applyExpr')
-        args = ast.s.app.head.argss.head.args.head.app.head.argss.head.args
+        args = ast.s.app.head.head.args.head.app.head.argss.head.args
         return k(args.head).must(be_token('1'))
 
     def cls_inst_attr(self) -> Expectation:
@@ -436,8 +436,8 @@ class ScalaSpec(ScalaSpecBase):
         ast = self.ast('{a.b.c}', 'template')
         expr = ast.s.stats.stats.head
         return (
-            k(expr).must(have_rule('attrExpr')) &
-            k(expr.tail.last.id).must(be_token('c'))
+            k(expr).must(have_rule('applyExpr')) &
+            k(expr.app.last.meth).must(be_token('c'))
         )
 
     def attr_assign(self) -> Expectation:
@@ -473,7 +473,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def complex_eta(self) -> Expectation:
         ast = self.expr(complex_eta, 'etaExpansion')
-        return k(ast.s.expr.targs.types.head).must(be_token('A'))
+        return k(ast.s.expr.app.head.meth.targs.types.head).must(be_token('A'))
 
     def chained_apply(self) -> Expectation:
         ast = self.ast(chained_apply, 'expr')
@@ -491,7 +491,7 @@ class ScalaSpec(ScalaSpecBase):
         ast = self.ast(apply_attr_type_args, 'template')
         return (
             k(ast.s.stats.stats.head).must(have_rule('applyExpr')) &
-            k(ast.s.stats.stats.head.app.head.meths.head.meth.targs.types.head).must(be_token('C'))
+            k(ast.s.stats.stats.head.app.head.meth.meth.targs.types.head).must(be_token('C'))
         )
 
     def apply_assign(self) -> Expectation:
@@ -558,8 +558,8 @@ class ScalaSpec(ScalaSpecBase):
         return k(ast.s.lquote.context).must(be_token('sm'))
 
     def single_line_cases(self) -> Expectation:
-        ast = self.ast('{ case a => b c d case _ => 2 }', 'blockExprContent')
-        return k(ast.s.head.body.tail.head.case.rhs).must(be_token('2'))
+        ast = self.ast('{ case a => b c d case _ => 2 }', 'caseBlock')
+        return k(ast.s.body.tail.head.case.rhs).must(be_token('2'))
 
     def only_implicit_params(self) -> Expectation:
         ast = self.stat('def a(implicit b: A) = c', 'templateStatDef')
@@ -584,7 +584,7 @@ class ScalaSpec(ScalaSpecBase):
 
     def case_clause_position(self) -> Expectation:
         ast = self.ast('val x = a match { case a: A => b case c => d }', 'templateStat')
-        return k(ast.s.def_.def_.rhs.cases.head.rhs.data.pos) == 31
+        return k(ast.s.def_.def_.rhs.block.body.head.rhs.data.pos) == 31
 
     def multiline_expr(self) -> Expectation:
         ast = self.expr(multiline_expr, 'applyExpr')

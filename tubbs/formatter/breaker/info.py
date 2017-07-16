@@ -12,6 +12,9 @@ class BreakSide:
     def apply(self, node: RoseAstTree) -> int:
         ...
 
+    def __str__(self) -> str:
+        return self.__class__.__name__
+
 
 class Before(BreakSide):
 

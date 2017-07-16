@@ -105,7 +105,7 @@ class BreakCondPos(BreakCondNest):
         self.side = side
 
     def __str__(self) -> str:
-        return f'BreakCondPos({str(self.cond)})'
+        return f'BreakCondPos({str(self.cond)}, {self.side})'
 
     def info(self, state: BreakState) -> BreakInfo:
         return self.cond.info(state).pos(self.side)
