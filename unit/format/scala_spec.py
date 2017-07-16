@@ -6,12 +6,13 @@ from kallikrein.matchers import contain, equal
 from kallikrein import k, unsafe_k
 from kallikrein.expectation import Expectation, AlgExpectation
 from kallikrein.matchers.either import be_right
-from amino import _, List, __
+from amino import _, List
 from amino.list import Lists
 
 from tubbs.tatsu.scala import Parser
-from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.tatsu.ast import AstMap, RoseAstTree, ast_rose_tree, AstList, AstElem
+from tubbs.formatter.scala.breaker import Breaker
+from tubbs.formatter.scala.indenter import Indenter
 
 from unit._support.ast import be_token
 
@@ -135,17 +136,17 @@ class ScalaFormatSpec:
 
     def break_fun(self) -> Expectation:
         breaker = Breaker(37)
-        broken = breaker.format(self.fun_ast).attempt
+        broken = breaker.format(self.fun_ast).value
         return k(broken / _.join_lines).must(contain(broken_fun))
 
     def indent_broken(self) -> Expectation:
         indenter = Indenter(2)
-        indented = indenter.format(self.broken_fun_ast).attempt
+        indented = indenter.format(self.broken_fun_ast).value
         return k(indented / _.join_lines).must(contain(formatted_fun))
 
     def break_lookbehind(self) -> Expectation:
         breaker = Breaker(12)
-        broken = breaker.format(self.parse(lookbehind)).attempt
+        broken = breaker.format(self.parse(lookbehind)).value
         return k(broken).must(contain(lookbehind_target))
 
 __all__ = ('ScalaFormatSpec',)

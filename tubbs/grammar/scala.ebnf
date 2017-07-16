@@ -569,7 +569,7 @@ def =
   | patVarDef
   | funDef
   | typeDef
-  | tmplDef
+  | implDef
   ;
 
 resultAnonFunc = params:anonFuncExprParams colon:':' type:compoundType
@@ -579,7 +579,7 @@ resultExpr =
   | arrow blockBody;
 blockStatMod = 'implicit' | 'lazy';
 blockStatDef = anno:{annotation} [mod:blockStatMod] def:def;
-blockStatTemplDef = anno:{annotation} mod:{localModifier} def:tmplDef;
+blockStatTemplDef = anno:{annotation} mod:{localModifier} def:implDef;
 blockStat1 =
   | comment
   | import
@@ -603,7 +603,7 @@ caseBlock = lbrace:lbrace body:caseClauses rbrace:rbrace;
 
 classDef = id [typeParamClause] {constrAnnotation} [accessModifier] classParamClauses classTemplateOpt;
 traitDef = [nl] id [nl] [typeParamClause] [nl] traitTemplateOpt;
-objectDef = id classTemplateOpt;
+objectDef = id:id tmpl:classTemplateOpt;
 classTemplateOpt = 'extends' classTemplate | [['extends'] template];
 traitTemplateOpt = 'extends' traitTemplate | [['extends'] template];
 classTemplate = [earlyDefs] classParents [template];
@@ -613,32 +613,34 @@ traitParents = annotOrRegularType {'with' annotOrRegularType};
 constr = annotOrRegularType {argListExpr};
 earlyDefs = lbrace:lbrace [earlyDef {eol earlyDef}] rbrace:rbrace [nl] 'with';
 earlyDef = {annotation [nl]} {modifier} patVarDef;
-class = [case] 'class' classDef;
-module = [case] 'object' objectDef;
+class = casekw:[case] classkw:'class' def:classDef;
+module = casekw:[case] objectkw:'object' def:objectDef;
 trait = 'trait' traitDef;
-tmplDef =
+implDef =
   | class
   | module
   | trait
   ;
 
-constrExpr = selfInvocation
+constrExpr =
+  | selfInvocation
   | constrBlock;
 constrBlock = '{' selfInvocation {eol blockStat} '}';
 selfInvocation = 'this' argListExpr {argListExpr};
 
+topImplDef = anno:{annotation [nl]} mod:{modifier} tmpl:implDef;
+
 topStat =
   | comment
-  | {annotation [nl]} {modifier} tmplDef
+  | topImplDef
   | import
   | packaging
   | packageObject
   | nl
   ;
-topStatSeq = topStat {eol topStat};
+topStatSeq = head:topStat tail:{eol topStat};
 packaging = 'package' qualId [nl] '{' topStatSeq '}';
 packageObject = 'package' 'object' objectDef;
 package = 'package' qualId;
 
-compilationUnit = initialcomment:{comment nl} package:{package eol}
-stats:topStatSeq;
+compilationUnit = initialcomment:{comment nl} package:{package eol} stats:topStatSeq;

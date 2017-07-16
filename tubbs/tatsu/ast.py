@@ -11,7 +11,7 @@ from toolz import dissoc, valfilter
 from ribosome.record import Record, str_field, int_field, field
 
 from amino import List, _, Maybe, Either, Right, Map, Boolean, LazyList, L
-from amino.tree import Node, ListNode, MapNode, LeafNode, Inode
+from amino.tree import Node, ListNode, MapNode, LeafNode, Inode, SubTree
 from amino.list import Lists
 from amino.bi_rose_tree import RoseTree, BiRoseTree
 from amino.func import dispatch
@@ -54,7 +54,7 @@ class Line(Record):
 
     @property
     def _str_extra(self) -> List[Any]:
-        return List(self.lnum, self.start, self.length, self.show_text)
+        return List(self.lnum, self.start, self.length, self.end, self.show_text)
 
     @property
     def trim(self) -> str:
@@ -542,8 +542,16 @@ class RoseData(Record):
     def ws_count(self) -> int:
         return self.ast.ws_count
 
+    @property
+    def pos(self) -> int:
+        return self.ast.pos
+
 
 class RoseAstTree(RoseTree[RoseData]):
+
+    @property
+    def ast(self) -> AstElem:
+        return self.data.ast
 
     @property
     def rule(self) -> str:
@@ -555,7 +563,7 @@ class RoseAstTree(RoseTree[RoseData]):
 
     @property
     def range(self) -> Tuple[int, int]:
-        return self.data.ast.range
+        return self.ast.range
 
     def sub_range(self, name: str) -> Either[str, Tuple[int, int]]:
         return Right(self.range) if self.is_token else self.sub_range_search(name)
@@ -569,15 +577,23 @@ class RoseAstTree(RoseTree[RoseData]):
 
     @property
     def pos(self) -> int:
-        return self.data.ast.pos
+        return self.ast.pos
 
     @property
     def line(self) -> int:
-        return self.data.ast.line
+        return self.ast.line
 
     @property
-    def ast(self) -> AstElem:
-        return self.data.ast
+    def s(self) -> SubTree:
+        return self.ast.s
+
+    @property
+    def startpos(self) -> int:
+        return self.pos
+
+    @property
+    def endpos(self) -> int:
+        return self.ast.endpos
 
 
 class RoseAstElem(BiRoseTree[RoseData], RoseAstTree):

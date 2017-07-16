@@ -69,9 +69,8 @@ class CoreTransitions(TubbsTransitions):
     @handle(Format)
     def format(self) -> Either[str, Message]:
         return (
-            (self.data.parser(self.msg.parser) &
-             self.formatters(self.msg.parser))
-            .flat_map2(L(self._format)(_, _, self.msg.range))
+            (self.data.parser(self.msg.parser) & self.formatters(self.msg.parser))
+            .map2(L(self._format)(_, _, self.msg.range))
             .map(L(self.update_range)(_, self.msg.range))
             .lmap(Fatal)
         )
@@ -83,8 +82,7 @@ class CoreTransitions(TubbsTransitions):
             .o(lambda: self.vim.buffer.options('filetype'))
         )
 
-    def load_and_run(self, f: Callable[[str], Either[str, Message]]
-                     ) -> Either[str, Tuple[ParserBase, Message]]:
+    def load_and_run(self, f: Callable[[str], Either[str, Message]]) -> Either[str, Tuple[ParserBase, Message]]:
         load = lambda name: (self.data.load_parser(name) & f(name))
         return self.parser_name // load
 
@@ -99,47 +97,37 @@ class CoreTransitions(TubbsTransitions):
             .sequence(Either)
         )
 
-    def lang_formatter(self, lang: str, name: str, tpe: str
-                       ) -> Either[str, Formatter]:
+    def lang_formatter(self, lang: str, name: str, tpe: str) -> Either[str, Formatter]:
         return (
             (self.vim.vars.pd('{}_{}'.format(lang, tpe)) //
              L(self.dict_formatter)(lang, name, _))
             .o(lambda: self.builtin_formatter(lang, name))
         )
 
-    def dict_formatter(self, lang: str, name: str, rules: dict
-                       ) -> Either[str, Formatter]:
+    def dict_formatter(self, lang: str, name: str, rules: dict) -> Either[str, Formatter]:
         def cons(tpe: type) -> Formatter:
             return tpe(self.vim, tpe.convert_data(Map(rules)))  # type: ignore
         return (
-            Either.import_name('{}.base'.format(formatter_mod),
-                               'VimDict{}'.format(name)) /
+            Either.import_name('{}.base'.format(formatter_mod), 'VimDict{}'.format(name)) /
             cons
         )
 
-    def builtin_formatter(self, lang: str, name: str
-                          ) -> Either[str, Formatter]:
+    def builtin_formatter(self, lang: str, name: str) -> Either[str, Formatter]:
         return (
-            Either.import_name('{}.{}'.format(formatter_mod, lang),
-                               'Vim{}'.format(name)) /
+            Either.import_name('{}.{}'.format(formatter_mod, lang), 'Vim{}'.format(name)) /
             __(self.vim)
         )
 
-    def with_match_msg(self, f: Callable[[ParserBase], Either]) -> Either:
-        return (self.data.parser(self.msg.parser) //
-                L(self.with_match)(_, self.msg.ident, f))
+    def with_match_msg(self, f: Callable[[ParserBase], Message]) -> Either:
+        return self.data.parser(self.msg.parser) / L(self.with_match)(_, self.msg.ident, f)
 
-    def with_match(self, parser: str, ident: str,
-                   f: Callable[[ParserBase], Either]) -> Either:
+    def with_match(self, parser: str, ident: str, f: Callable[[ParserBase], Either]) -> Either:
         return self.crawler(parser) // __.find_and_parse(ident) // f
 
-    def visual(self, match: Match) -> Either:
+    def visual(self, match: Match) -> UnitTask:
         self.log.debug('attempting to select {}'.format(match))
-        return (
-            match.range1
-            .map2(L(Task.delay)(self.vim.window.visual_line, _, _)) /
-            UnitTask
-        )
+        start, end = match.range1
+        return UnitTask(Task.delay(self.vim.window.visual_line, start, end))
 
     def hints(self, name: str) -> Either[str, HintsBase]:
         return (
@@ -156,18 +144,15 @@ class CoreTransitions(TubbsTransitions):
         content = self.vim.buffer.content
         return self.vim.window.line0 / (L(Crawler)(content, _, parser, hints))
 
-    def _format(self, parser: ParserBase, formatters: List[Formatter],
-                rng: Range) -> Either[str, Formatted]:
+    def _format(self, parser: ParserBase, formatters: List[Formatter], rng: Range) -> Formatted:
         content = self.vim.buffer.content
-        return self.formatting_facade(parser, formatters).format(content, rng)
+        return self.formatting_facade(parser, formatters).format(content, rng)._value()
 
-    def formatting_facade(self, parser: ParserBase, formatters: List[Formatter]
-                          ) -> FormattingFacade:
+    def formatting_facade(self, parser: ParserBase, formatters: List[Formatter]) -> FormattingFacade:
         return FormattingFacade(parser, formatters, self.hints(parser.name))
 
     def update_range(self, formatted: Formatted, rng: Range) -> Message:
-        return io(__.buffer.set_content(formatted.lines,
-                                        rng=slice(*formatted.rng)))
+        return io(__.buffer.set_content(formatted.lines, rng=slice(*formatted.rng)))
 
 
 class Plugin(TubbsComponent):

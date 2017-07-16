@@ -1,10 +1,11 @@
 from tubbs.tatsu.scala import Parser
-from tubbs.formatter.scala import Breaker, Indenter
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter
-from tubbs.formatter.breaker import DictBreaker
 from tubbs.formatter.indenter import DictIndenter
+from tubbs.formatter.breaker.main import DictBreaker
+from tubbs.formatter.scala.breaker import Breaker
+from tubbs.formatter.scala.indenter import Indenter
 
 from kallikrein.expectation import Expectation
 from kallikrein import k
@@ -32,7 +33,6 @@ def_target = '''  def fun1[TPar1 <: UB1: TC1]
     }
   }'''
 
-
 val_target = '''\
   val name =
     value.attr
@@ -44,11 +44,9 @@ val_target = '''\
       }
       .zip'''
 
-
 val_target2 = '''val x = a
   .b { case aaaaaaaaaaaaaaaaaaa => b }
 '''
-
 
 broken_apply = '''val a =
   foo
@@ -66,17 +64,16 @@ def_def = '''def foo = {
 
 
 class FormattingFacadeSpec:
-
     '''formatting facade
-
-    broken apply expression with case clauses $broken_apply
-    '''
-    # break a scala def
-    # with default rules $scala_def_default
+    break a scala def
+    with default rules $scala_def_default
     # with custom rules in a dict $scala_def_dict
 
-    # break a scala val
+    break a scala val
     # with default rules $scala_val_default
+
+    # broken apply expression with case clauses $broken_apply
+    '''
 
     def setup(self) -> None:
         def_content = load_fixture('format', 'scala', 'file1.scala')
@@ -100,8 +97,9 @@ class FormattingFacadeSpec:
 
     def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
-        result = facade.format(lines, (9, 10)) / _.lines
-        return k(result).must(contain(Lists.lines(target)))
+        result = facade.format(lines, (9, 10))._value().lines
+        print(result.join_lines)
+        return k(result) == Lists.lines(target)
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:
         return self.format_scala(formatters, self.def_lines, def_target)
@@ -143,7 +141,6 @@ class FormattingFacadeSpec:
         ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
         ind = Indenter(2)
         r = ind.format(ast)
-        v = r.attempt / _.join_lines
-        return k(v).must(contain(broken_apply))
+        return k(r.value / _.join_lines).must(contain(broken_apply))
 
 __all__ = ('FormattingFacadeSpec',)

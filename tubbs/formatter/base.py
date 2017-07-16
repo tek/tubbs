@@ -1,7 +1,7 @@
 import abc
 from typing import TypeVar, Callable, Generic, GenericMeta
 
-from amino import List, Map, Task, Maybe, curried
+from amino import List, Map, Eval, Maybe, curried, Either
 from amino.list import Lists
 from amino.util.string import snake_case
 
@@ -15,10 +15,10 @@ A = TypeVar('A')
 class Formatter(Generic[A], Logging):
 
     @abc.abstractmethod
-    def format(self, ast: AstElem) -> Task[List[str]]:
+    def format(self, ast: AstElem) -> Eval[Either[str, List[str]]]:
         ...
 
-    def __call__(self, ast: AstElem) -> Task[List[str]]:
+    def __call__(self, ast: AstElem) -> Eval[Either[str, List[str]]]:
         return self.format(ast)
 
     @abc.abstractmethod
@@ -33,7 +33,7 @@ class Formatter(Generic[A], Logging):
 
     @curried
     def _try_handler(self, node: RoseData, name: str) -> Maybe[Callable[[RoseData], A]]:
-        self.log.ddebug('trying ident handler {}'.format(name))
+        self.log.ddebug(f'trying ident handler {name}')
         return self.handler(name).foreach(lambda a: self.log.ddebug('success'))
 
     @abc.abstractmethod

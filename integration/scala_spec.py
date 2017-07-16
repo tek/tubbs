@@ -101,6 +101,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         self.vim.edit(fpath).run_sync()
         self.vim.buffer.options.set('filetype', 'scala')
         self.vim.buffer.options.set('textwidth', 40)
+        self.vim.buffer.options.set('shiftwidth', 2)
 
     @property
     def scala_file1(self) -> Path:

@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from amino import List, Either, L, _, Maybe, Task
+from amino import List, Either, L, _, Maybe, Eval
 
 from tubbs.logging import Logging
 from tubbs.formatter.base import Formatter
@@ -31,21 +31,22 @@ class FormattingFacade(Logging):
         result = crawler.parsable_range
         return result.map(_.rule).zip(result.map(_.range))
 
-    def format(self, context: List[str], rng: Range) -> Task[Formatted]:
+    def format(self, context: List[str], rng: Range) -> Eval[Formatted]:
         return (
             self.parsable_range(context, rng)
             .flat_map2(L(self.format_range)(_, context, _))
         )
 
-    def format_range(self, rule: str, context: List[str], rng: Range) -> Task[Formatted]:
+    def format_range(self, rule: str, context: List[str], rng: Range) -> Eval[Formatted]:
         lines = context.slice(*rng)
         format_with = L(self.format_with)(rule, _, _)
-        return self.formatters.fold_m(Task.now(lines))(format_with) / L(Formatted)(_, rng)
+        return self.formatters.fold_m(Eval.now(lines))(format_with) / L(Formatted)(_, rng)
 
-    def format_with(self, rule: str, lines: List[str], formatter: Formatter) -> Task[List[str]]:
+    def format_with(self, rule: str, lines: List[str], formatter: Formatter) -> Eval[List[str]]:
         return (
             self.parser.parse(lines.join_lines, rule) //
-            formatter.format
+            formatter.format /
+            (_ | lines)
         )
 
 __all__ = ('FormattingFacade',)

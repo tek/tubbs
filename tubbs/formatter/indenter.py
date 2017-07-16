@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Any, Union, cast
 
-from amino import List, L, Right, Map, Left, Either, __, _, Maybe, Task, Boolean
+from amino import List, L, Right, Map, Left, Either, __, _, Maybe, Eval, Boolean
 from amino.list import Lists
 
 from ribosome.record import Record, int_field, field, list_field, bool_field
@@ -123,9 +123,9 @@ class IndenterBase(Formatter):
     def default_handler(self) -> Handler:
         ...
 
-    def format(self, ast: AstElem) -> Task[List[str]]:
+    def format(self, ast: AstElem) -> Eval[Either[str, List[str]]]:
         rt = ast_rose_tree(ast.boundary_nodes)
-        return (self.collect_indents(rt) / _.indents / L(self.apply_indents)(ast, _)).task()
+        return Eval.now(self.collect_indents(rt) / _.indents / L(self.apply_indents)(ast, _))
 
     def collect_indents(self, ast: RoseAstTree) -> List[str]:
         def run(z: IndentState, n: RoseAstTree) -> Either[str, IndentState]:

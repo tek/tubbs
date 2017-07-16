@@ -1,0 +1,48 @@
+from typing import Callable
+
+from amino.tree import SubTree
+from amino import Boolean
+
+from tubbs.tatsu.ast import AstElem, AstList
+from tubbs.formatter.breaker.state import BreakState
+from tubbs.formatter.breaker.cond import pred_cond, pred_cond_f, BreakCond, Invariant
+
+
+def inv(prio: float) -> BreakCond:
+    return Invariant().prio(prio)
+
+
+def nel(ast: AstElem) -> bool:
+    return isinstance(ast, AstList) and ast.data.length > 0
+
+
+@pred_cond('multi line block')
+def multi_line_block(state: BreakState) -> Boolean:
+    return state.parent.s.body.tail.e.exists(nel)
+
+
+@pred_cond_f('sibling break')
+def sibling(state: BreakState, attr: Callable[[SubTree], SubTree]) -> Callable[[BreakState], Boolean]:
+    return state.sibling(attr)
+
+
+@pred_cond_f('parent rule')
+def parent_rule(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
+    return state.parent.rule == rule
+
+
+@pred_cond_f('sibling rule')
+def sibling_rule(state: BreakState, attr: Callable[[SubTree], SubTree], rule: str) -> Callable[[BreakState], Boolean]:
+    return attr(state.parent.s).rule.contains(rule)
+
+
+@pred_cond_f('sibling valid')
+def sibling_valid(state: BreakState, attr: Callable[[SubTree], SubTree]) -> Callable[[BreakState], Boolean]:
+    return attr(state.parent.s).valid
+
+
+@pred_cond_f('after node with rule')
+def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
+    return state.after(rule)
+
+__all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after')
