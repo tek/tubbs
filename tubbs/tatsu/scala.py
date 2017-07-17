@@ -1,9 +1,9 @@
-from tubbs.tatsu.base import BuiltinParser
+from tubbs.tatsu.base import LangParser
 
 from amino import Map
 
 
-class Parser(BuiltinParser):
+class Parser(LangParser):
 
     @property
     def name(self):
@@ -12,6 +12,10 @@ class Parser(BuiltinParser):
     @property
     def parser_args(self):
         return super().parser_args ** Map(comments_re='/\*.*?\*/')
+
+    @property
+    def left_recursion(self) -> bool:
+        return False
 
 
 def parse(text: str, rule: str):

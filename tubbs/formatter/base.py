@@ -22,17 +22,17 @@ class Formatter(Generic[A], Logging):
         return self.format(ast)
 
     @abc.abstractmethod
-    def handler(self, name: str) -> Maybe[Callable[[RoseData], A]]:
+    def handler(self, name: str) -> Maybe[Callable[[], A]]:
         ...
 
-    def lookup_handler(self, node: RoseData) -> Callable[[RoseData], A]:
+    def lookup_handler(self, node: RoseData) -> Callable[[], A]:
         parent_rule = snake_case(node.parent_rule)
         key_handler = f'{parent_rule}_{node.key}'
         names = Lists.iff(node.ast.is_rule_node)(snake_case(node.rule)).cons(key_handler)
         return self._handler_names(node, names).find_map(self._try_handler(node)) | (lambda: self.default_handler)
 
     @curried
-    def _try_handler(self, node: RoseData, name: str) -> Maybe[Callable[[RoseData], A]]:
+    def _try_handler(self, node: RoseData, name: str) -> Maybe[Callable[[], A]]:
         self.log.ddebug(f'trying ident handler {name}')
         return self.handler(name).foreach(lambda a: self.log.ddebug('success'))
 

@@ -130,4 +130,9 @@ class BreakPrioPos(HasPos, HasPrio, BreakInfo):
         return Right((self._prio, self._pos))
 
 
+class Skip(BreakPrioPos):
+
+    def __init__(self) -> None:
+        super().__init__(0.0, Before())
+
 __all__ = ('BreakInfo',)

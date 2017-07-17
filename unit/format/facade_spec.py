@@ -1,4 +1,5 @@
 from tubbs.tatsu.scala import Parser
+from tubbs.tatsu.break_dsl import Parser as BreakParser
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter
@@ -68,9 +69,9 @@ class FormattingFacadeSpec:
     # with custom rules in a dict $scala_def_dict
 
     break a scala val
-    with default rules $scala_val_default
+    # with default rules $scala_val_default
 
-    broken apply expression with case clauses $broken_apply
+    # broken apply expression with case clauses $broken_apply
     '''
 
     def setup(self) -> None:
@@ -80,6 +81,8 @@ class FormattingFacadeSpec:
         self.val_lines = Lists.lines(val_content)
         self.parser = Parser()
         self.parser.gen()
+        self.break_parser = BreakParser()
+        self.break_parser.gen()
 
     def facade(self, formatters: List[Formatter]) -> FormattingFacade:
         hints = Hints()
@@ -87,7 +90,7 @@ class FormattingFacadeSpec:
 
     @property
     def default_formatters(self) -> List[Formatter]:
-        return List(Breaker(40), Indenter(2))
+        return List(Breaker(self.break_parser, 40), Indenter(2))
 
     @property
     def default_facade(self) -> FormattingFacade:

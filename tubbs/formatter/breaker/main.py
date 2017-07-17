@@ -11,11 +11,12 @@ from ribosome.util.callback import VimCallback
 
 from tubbs.tatsu.ast import AstElem, RoseData, ast_rose_tree, RoseAstTree
 from tubbs.formatter.base import Formatter, VimFormatterMeta
-from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.strict import StrictBreak
 from tubbs.formatter.breaker.breaks import Breaks
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.cond import BreakCond, CondBreak
+from tubbs.tatsu.break_dsl import Parser
+from tubbs.formatter.breaker.dsl import parse_break_expr
 
 
 def hl(data: str) -> str:
@@ -28,12 +29,13 @@ ws_re = Regex(r'^\s*$')
 def only_ws(data: str) -> Boolean:
     return ws_re.match(data).present
 
-Handler = Callable[[RoseData], BreakCond]
+Handler = Callable[[], BreakCond]
 
 
-class BreakerBase(Formatter):
+class BreakerBase(Formatter[BreakCond]):
 
-    def __init__(self, textwidth: int) -> None:
+    def __init__(self, parser: Parser, textwidth: int) -> None:
+        self.parser = parser
         self.textwidth = textwidth
 
     @abc.abstractproperty
@@ -44,7 +46,7 @@ class BreakerBase(Formatter):
         rt = ast_rose_tree(ast)
         return (self.breaks(rt).eff() / L(self.apply_breaks)(ast, _)).value
 
-    def breaks(self, ast: RoseAstTree) -> Eval[Either[str, List[StrictBreak]]]:
+    def breaks(self, ast: RoseAstTree) -> Eval[Either[str, List[CondBreak]]]:
         return (self.brk(ast, List()).eff() / Breaks.from_attr('conds')).value
 
     def apply_breaks(self, ast: AstElem, breaks: Breaks) -> List[str]:
@@ -62,8 +64,10 @@ class BreakerBase(Formatter):
         )
 
     def break_line(self, breaks: Breaks, cur: str, start: int) -> Tuple[Breaks, List[str]]:
+        def log_error(err: str) -> None:
+            self.log.error(f'error in break conditions: {err}')
         end = start + len(cur)
-        sub_breaks, qualified = breaks.range(start, end)
+        sub_breaks, qualified = breaks.range(start, end).leffect(log_error) | (breaks, List())
         def rec2(sub: Breaks, data: str, pos: int) -> List[str]:
             return (
                 List()
@@ -95,7 +99,7 @@ class BreakerBase(Formatter):
         ).leffect(self.log.ddebug)
         return broken | (breaks, List(cur))
 
-    def handle(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Either[str, List[StrictBreak]]:
+    def handle(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Either[str, List[CondBreak]]:
         handler = self.lookup_handler(node.data)
         result = handler()
         return Right(List(CondBreak(node, result)))
@@ -103,52 +107,53 @@ class BreakerBase(Formatter):
     def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
         return names
 
-    def brk(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[StrictBreak]]]:
+    def brk(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
         handler = self.break_node if node.data.is_token else self.break_inode
         return handler(node, breaks)
 
-    def sub_breaks(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[StrictBreak]]]:
+    def sub_breaks(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
         return (
             node.sub.drain.traverse(L(self.brk)(_, breaks), Eval) /
             __.flat_sequence(Either).map(breaks.add)
         )
 
-    def break_inode(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[StrictBreak]]]:
+    def break_inode(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
         return (
             self.break_node(node, breaks) //
             __.flat_traverse(L(self.sub_breaks)(node, _), Eval)
         )
 
-    def break_node(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[StrictBreak]]]:
+    def break_node(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
         return Eval.later(self.handle, node, breaks)
 
 
 class Breaker(BreakerBase):
 
-    def __init__(self, rules: BreakRules, textwidth: int) -> None:
-        super().__init__(textwidth)
+    def __init__(self, parser: Parser, rules: BreakRules, textwidth: int) -> None:
+        super().__init__(parser, textwidth)
         self.rules = rules
 
-    def handler(self, attr: str) -> Maybe[Callable[[RoseData], BreakCond]]:
+    def handler(self, attr: str) -> Maybe[Handler]:
         return Maybe.check(getattr(self.rules, attr, None))
 
     @property
-    def default_handler(self) -> Callable[[RoseData], BreakCond]:
+    def default_handler(self) -> Handler:
         return self.rules.default
 
 
 class DictBreaker(BreakerBase):
 
-    def __init__(self, rules: Map, textwidth: int) -> None:
-        super().__init__(textwidth)
+    def __init__(self, parser: Parser, rules: Map, textwidth: int) -> None:
+        super().__init__(parser, textwidth)
         self.rules = rules
+        self.extra_conds = None
 
-    def handler(self, attr: str) -> Maybe[Callable[[RoseData], BreakCond]]:
-        return self.rules.lift(attr) / (lambda a: lambda node: a)
+    def handler(self, attr: str) -> Maybe[Handler]:
+        return self.rules.lift(attr) / parse_break_expr(self.parser, self.extra_conds)
 
     @property
-    def default_handler(self) -> Callable[[RoseData], BreakCond]:
-        return lambda node: List()
+    def default_handler(self) -> Handler:
+        return lambda: List()
 
 
 class VimDictBreaker(DictBreaker, VimCallback, metaclass=VimFormatterMeta):
@@ -164,9 +169,9 @@ class VimDictBreaker(DictBreaker, VimCallback, metaclass=VimFormatterMeta):
             )
         return data.valmap(convert)
 
-    def __init__(self, vim: NvimFacade, rules: Map) -> None:
-        tw = vim.buffer.options('textwidth') | 80
-        super().__init__(rules, tw)
+    def __init__(self, parser: Parser, vim: NvimFacade, rules: Map) -> None:
+        tw = vim.buffer.options('textwidth') | 120
+        super().__init__(parser, rules, tw)
 
 
 __all__ = ('Breaker', 'DictBreaker', 'VimDictBreaker')

@@ -1,6 +1,6 @@
 from typing import Any, Tuple
 
-from amino import List, L, _, __
+from amino import List, L, _, Either
 
 from ribosome.record import Record, list_field
 
@@ -12,16 +12,17 @@ class Breaks(Record):
     applied = list_field(StrictBreak)
     conds = list_field(CondBreak)
 
-    def range(self, start: int, end: int) -> Tuple['Breaks', List[StrictBreak]]:
+    def range(self, start: int, end: int) -> Either[str, Tuple['Breaks', List[StrictBreak]]]:
         def matches(pos: int) -> bool:
             return start < pos < end
         def cond_match(b: BreakCond) -> bool:
             return matches(b.startpos) or matches(b.endpos)
-        matcher = __.filter(L(matches)(_.position))
+        def cons(all: List[StrictBreak]) -> Tuple['Breaks', List[StrictBreak]]:
+            qualified = all.filter(L(matches)(_.position))
+            sub = self.set(conds=qual_cond, applied=self.applied)
+            return sub, qualified
         qual_cond = self.conds.filter(cond_match)
-        qualified = matcher(qual_cond.flat_map(lambda a: a.brk(self.applied).to_list))
-        sub = self.set(conds=qual_cond, applied=self.applied)
-        return sub, qualified
+        return qual_cond.flat_traverse(lambda a: a.brk(self.applied), Either) / cons
 
     @property
     def _str_extra(self) -> List[Any]:

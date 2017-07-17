@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Any
 
-from amino import List, Either
+from amino import List, Either, __
 
 from tubbs.tatsu.ast import RoseAstTree
 from tubbs.formatter.breaker.strict import StrictBreak
@@ -20,8 +20,16 @@ class BreakCond(abc.ABC):
     def info(self, state: BreakState) -> BreakInfo:
         ...
 
+    @abc.abstractmethod
+    def infos(self, state: BreakState) -> List[BreakInfo]:
+        ...
+
     @abc.abstractproperty
     def _desc(self) -> str:
+        ...
+
+    @abc.abstractmethod
+    def __add__(self, other: 'BreakCond') -> 'BreakCond':
         ...
 
     def __or__(self, other: 'BreakCond') -> 'BreakCond':
@@ -48,7 +56,16 @@ class BreakCond(abc.ABC):
         return str(self)
 
 
-class BreakCondNest(BreakCond):
+class SingleBreakCond(BreakCond):
+
+    def infos(self, state: BreakState) -> List[BreakInfo]:
+        return List(self.info(state))
+
+    def __add__(self, other: BreakCond) -> BreakCond:
+        return BreakCondSet(List(self, other))
+
+
+class BreakCondNest(SingleBreakCond):
 
     def __init__(self, cond: BreakCond) -> None:
         self.cond = cond
@@ -57,7 +74,7 @@ class BreakCondNest(BreakCond):
         return self.cond.info(state)
 
 
-class BreakCondAlg(BreakCond):
+class BreakCondAlg(SingleBreakCond):
 
     def __init__(self, left: BreakCond, right: BreakCond) -> None:
         self.left = left
@@ -115,7 +132,7 @@ class BreakCondPos(BreakCondNest):
         return f'{self.cond._desc}, {self.side}'
 
 
-class Invariant(BreakCond):
+class Invariant(SingleBreakCond):
 
     @property
     def _desc(self) -> str:
@@ -128,19 +145,19 @@ class Invariant(BreakCond):
         return self._desc
 
 
-class NoBreak(BreakCond):
+class NoBreak(SingleBreakCond):
 
     @property
     def _desc(self) -> str:
         return 'no break'
 
     def info(self, state: BreakState) -> BreakInfo:
-        return info.Invalid(self._desc)
+        return info.Skip()
 
 PC = Callable[[BreakState], bool]
 
 
-class PredCond(BreakCond):
+class PredCond(SingleBreakCond):
 
     def __init__(self, desc: str, f: PC) -> None:
         self.f = f
@@ -152,6 +169,25 @@ class PredCond(BreakCond):
 
     def info(self, state: BreakState) -> BreakInfo:
         return info.Empty() if self.f(state) else info.Invalid(f'{self._desc} failed')
+
+
+class BreakCondSet(BreakCond):
+
+    def __init__(self, conds: List[BreakCond]) -> None:
+        self.conds = conds
+
+    @property
+    def _desc(self) -> str:
+        return self.conds.mk_string(' + ')
+
+    def info(self, state: BreakState) -> BreakInfo:
+        return info.Invalid('BreakCondSet cannot be nested')
+
+    def infos(self, state: BreakState) -> List[BreakInfo]:
+        return self.conds / __.info(state)
+
+    def __add__(self, other: BreakCond) -> BreakCond:
+        return BreakCondSet(self.conds.cat(other))
 
 
 def pred_cond(desc: str) -> Callable[[PC], BreakCond]:
@@ -193,7 +229,13 @@ class CondBreak:
         def cons(prio: float, side: BreakSide) -> StrictBreak:
             return mk_break(prio, self.node, self.pos(side))
         state = BreakState(self.node, breaks)
-        return (self.cond.info(state).info.map2(cons)).lmap(lambda a: f'{self.cond} did not match: {a}')
+        return (
+            self.cond
+            .infos(state)
+            .filter_not(lambda a: isinstance(a, info.Skip))
+            .traverse(__.info.map2(cons), Either)
+            .lmap(lambda a: f'{self.cond} did not match: {a}')
+        )
 
     def __str__(self) -> str:
         return f'CondBreak({self.node.rule}, {self.cond})'

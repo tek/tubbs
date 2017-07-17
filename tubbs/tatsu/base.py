@@ -32,6 +32,14 @@ class ParserBase(Logging, abc.ABC):
     def parser_path(self) -> Path:
         ...
 
+    @abc.abstractproperty
+    def left_recursion(self) -> bool:
+        ...
+
+    @abc.abstractmethod
+    def cons_parser(self, tpe: type) -> Either[str, ParserExt]:
+        ...
+
     @property
     def camel_name(self) -> str:
         return camelcaseify(self.name)
@@ -55,7 +63,7 @@ class ParserBase(Logging, abc.ABC):
     @property
     def parser_args(self) -> Map[str, Any]:
         return Map(
-            left_recursion=False,
+            left_recursion=self.left_recursion,
             # trace=True,
         )
 
@@ -81,14 +89,11 @@ class ParserBase(Logging, abc.ABC):
 
     @property
     def parser(self) -> Either[str, ParserExt]:
-        def cons(tpe: type) -> Either[str, ParserExt]:
-            cls = type(self.parser_class, (ParserExt, tpe), {})
-            return Try(lambda *a, **kw: cls(*a, **kw), **self.parser_args)
-        return Either.import_path(self.module_path) // cons
+        return Either.import_path(self.module_path) // self.cons_parser
 
-    @property
-    def semantics(self) -> DataSemantics:
-        return DataSemantics()
+    @abc.abstractproperty
+    def semantics(self) -> Any:
+        ...
 
     def parse(self, text: str, rule: str) -> Either[str, AstElem]:
         def log_error(err: str) -> None:
@@ -124,6 +129,17 @@ class BuiltinParser(ParserBase):
     @property
     def parser_path(self) -> Path:
         return self.parsers_path / '{}.py'.format(self.name)
+
+
+class LangParser(BuiltinParser):
+
+    def cons_parser(self, tpe: type) -> Either[str, ParserExt]:
+        cls = type(self.parser_class, (ParserExt, tpe), {})
+        return Try(lambda *a, **kw: cls(*a, **kw), **self.parser_args)
+
+    @property
+    def semantics(self) -> Any:
+        return DataSemantics()
 
 
 class Parsers(Record):

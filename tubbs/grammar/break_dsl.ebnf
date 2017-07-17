@@ -1,0 +1,94 @@
+@@whitespace :: / /
+@@keyword :: or and not
+
+orkw = 'or';
+andkw = 'and';
+notkw = 'not';
+lpar = '(';
+rpar = ')';
+at = '@';
+wildcard = '_';
+dot = '.';
+comma = ',';
+plus = '+';
+colon = ':';
+before = 'before';
+after = 'after';
+
+float::float =
+  /\d+\.\d+/
+  ;
+
+@name
+name::Name =
+  data:/[a-zA-z_][a-zA-z0-9_]*/
+  ;
+
+method::Method =
+  dot name:name
+  ;
+
+lambda::LambdaExpr =
+  wildcard methods:{method}+
+  ;
+
+arg =
+  | lambda
+  | name
+  ;
+
+cond::Cond =
+  name:name lpar (comma).{args:arg}+ rpar
+  ;
+
+orCond::OrCond =
+  left:expr orkw right:expr
+  ;
+
+andCond::AndCond =
+  left:expr andkw right:expr
+  ;
+
+notExpr::NotCond =
+  notkw expr:expr
+  ;
+
+compoundExpr =
+  | orCond
+  | andCond
+  | notExpr
+  ;
+
+parensExpr =
+  lpar @:expr rpar
+  ;
+
+prio::Prio =
+  value:float
+  ;
+
+prioCond::PrioCond =
+  prio:prio at expr:expr
+  ;
+
+expr =
+  | prioCond
+  | parensExpr
+  | compoundExpr
+  | cond
+  | name
+  | prio
+  ;
+
+side =
+  | before
+  | after
+  ;
+
+sideExpr::Side =
+  side:side colon expr:expr
+  ;
+
+top::Top =
+  (plus).{sides:sideExpr}+
+  ;
