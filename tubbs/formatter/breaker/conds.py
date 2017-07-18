@@ -1,7 +1,7 @@
 from typing import Callable
 
 from amino.tree import SubTree
-from amino import Boolean
+from amino import Boolean, Map
 
 from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
@@ -54,5 +54,16 @@ def sibling_valid(state: BreakState, attr: Callable[[SubTree], SubTree]) -> Call
 def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
     return state.after(rule)
 
+
+default_conds = Map(
+    multi_line_block_for=multi_line_block_for,
+    multi_line_block=multi_line_block,
+    sibling=sibling,
+    parent_rule=parent_rule,
+    sibling_rule=sibling_rule,
+    sibling_valid=sibling_valid,
+    after=after,
+)
+
 __all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after',
-           'multi_line_block_for')
+           'multi_line_block_for', 'default_conds')

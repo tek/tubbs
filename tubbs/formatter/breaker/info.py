@@ -54,12 +54,20 @@ class BreakInfo:
 
 class Incomplete(BreakInfo):
 
+    @abc.abstractproperty
+    def _error(self) -> str:
+        ...
+
     @property
     def info(self) -> Either[str, Tuple[float, BreakSide]]:
-        return Left('prio or pos missing for break')
+        return Left(self._error)
 
 
 class Empty(Incomplete):
+
+    @property
+    def _error(self) -> str:
+        return 'neither prio nor pos was set'
 
     def pos(self, pos: BreakSide) -> BreakInfo:
         return BreakPos(pos)
@@ -72,6 +80,10 @@ class Invalid(Incomplete):
 
     def __init__(self, error: str) -> None:
         self.error = error
+
+    @property
+    def _error(self) -> str:
+        return self.error
 
     def pos(self, pos: BreakSide) -> BreakInfo:
         return self
@@ -94,6 +106,10 @@ class HasPrio:
 
 class BreakPrio(HasPrio, Incomplete):
 
+    @property
+    def _error(self) -> str:
+        return 'pos was not set'
+
     def __init__(self, prio: float) -> None:
         self._prio = prio
 
@@ -111,6 +127,10 @@ class HasPos:
 
 
 class BreakPos(HasPos, Incomplete):
+
+    @property
+    def _error(self) -> str:
+        return 'prio was not set'
 
     def __init__(self, pos: BreakSide) -> None:
         self._pos = pos

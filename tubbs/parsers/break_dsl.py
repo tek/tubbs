@@ -82,16 +82,16 @@ class BreakDslParser(Parser):
         )
 
     @tatsumasu()
-    def _orkw_(self):  # noqa
-        self._token('or')
+    def _or_(self):  # noqa
+        self._token('|')
 
     @tatsumasu()
-    def _andkw_(self):  # noqa
-        self._token('and')
+    def _and_(self):  # noqa
+        self._token('&')
 
     @tatsumasu()
-    def _notkw_(self):  # noqa
-        self._token('not')
+    def _not_(self):  # noqa
+        self._token('~')
 
     @tatsumasu()
     def _lpar_(self):  # noqa
@@ -199,11 +199,20 @@ class BreakDslParser(Parser):
             []
         )
 
+    @tatsumasu('CondStrict')
+    def _condStrict_(self):  # noqa
+        self._name_()
+        self.name_last_node('name')
+        self.ast._define(
+            ['name'],
+            []
+        )
+
     @tatsumasu('OrCond')
     def _orCond_(self):  # noqa
         self._expr_()
         self.name_last_node('left')
-        self._orkw_()
+        self._or_()
         self._expr_()
         self.name_last_node('right')
         self.ast._define(
@@ -215,7 +224,7 @@ class BreakDslParser(Parser):
     def _andCond_(self):  # noqa
         self._expr_()
         self.name_last_node('left')
-        self._andkw_()
+        self._and_()
         self._expr_()
         self.name_last_node('right')
         self.ast._define(
@@ -225,7 +234,7 @@ class BreakDslParser(Parser):
 
     @tatsumasu('NotCond')
     def _notExpr_(self):  # noqa
-        self._notkw_()
+        self._not_()
         self._expr_()
         self.name_last_node('expr')
         self.ast._define(
@@ -284,7 +293,7 @@ class BreakDslParser(Parser):
             with self._option():
                 self._cond_()
             with self._option():
-                self._name_()
+                self._condStrict_()
             with self._option():
                 self._prio_()
             self._error('no available options')
@@ -328,13 +337,13 @@ class BreakDslParser(Parser):
 
 
 class BreakDslSemantics(object):
-    def orkw(self, ast):  # noqa
+    def or_(self, ast):  # noqa
         return ast
 
-    def andkw(self, ast):  # noqa
+    def and_(self, ast):  # noqa
         return ast
 
-    def notkw(self, ast):  # noqa
+    def not_(self, ast):  # noqa
         return ast
 
     def lpar(self, ast):  # noqa
@@ -383,6 +392,9 @@ class BreakDslSemantics(object):
         return ast
 
     def cond(self, ast):  # noqa
+        return ast
+
+    def condStrict(self, ast):  # noqa
         return ast
 
     def orCond(self, ast):  # noqa

@@ -7,6 +7,7 @@ from tubbs.formatter.indenter.main import DictIndenter
 from tubbs.formatter.breaker.main import DictBreaker
 from tubbs.formatter.scala.breaker import Breaker
 from tubbs.formatter.scala.indenter import Indenter
+from tubbs.formatter.breaker.conds import default_conds
 
 from kallikrein.expectation import Expectation
 from kallikrein import k
@@ -65,8 +66,8 @@ def_def = '''def foo = {
 class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
-    with default rules $scala_def_default
-    # with custom rules in a dict $scala_def_dict
+    # with default rules $scala_def_default
+    with custom rules in a dict $scala_def_dict
 
     break a scala val
     # with default rules $scala_val_default
@@ -90,7 +91,7 @@ class FormattingFacadeSpec:
 
     @property
     def default_formatters(self) -> List[Formatter]:
-        return List(Breaker(self.break_parser, 40), Indenter(2))
+        return List(Breaker(40), Indenter(2))
 
     @property
     def default_facade(self) -> FormattingFacade:
@@ -111,22 +112,25 @@ class FormattingFacadeSpec:
         return self.scala_def(self.default_formatters)
 
     def scala_def_dict(self) -> Expectation:
+        block_rhs = '(0.3 @ (sibling_rule(_.rhs, block) & sibling_valid(_.rhs) & after(lbrace)))'
         breaks = Map(
-            map_case_clause=('casekw', 1.0, 0.0),
-            map_block_body=('head', 0.9, 0.0),
-            list_block_rest_stat=('stat', 0.9, 0.0),
-            token_seminl_semi=('semi', 0.0, 1.1),
-            token_lbrace=('lbrace', 0.0, 1.0),
-            token_rbrace=('rbrace', 1.0, 0.0),
-            map_param_clause=('lpar', 0.89, 0.1),
-            map_implicit_param_clause=('lpar', 0.9, 0.1),
+            case_block_body='before:(1.1 @ multi_line_block | 0.91)',
+            case_clause='before:(1.0 @ multi_line_block_for(_.parent.parent.parent.parent) | 0.9)',
+            block_body='before:1.1',
+            block_rest_stat='before:0.8',
+            seminl_semi='after:1.1',
+            lbrace='after:((1.0 @ multi_line_block) | 0.31)',
+            rbrace='before:((1.0 @ multi_line_block) | (1.0 @ sibling(_.body)) | (1.0 @ sibling(_.brace)) | 0.31)',
+            param_clause='before:0.7',
+            implicit_param_clause='before:0.75',
+            assign=f'after:((0.0 @ parent_rule(param)) | {block_rhs} | 0.8)',
         )
         indents = Map(
             case_clauses=1,
             block_body=1,
             rbrace=-1,
         )
-        formatters = List(DictBreaker(breaks, 40), DictIndenter(indents, 2))
+        formatters = List(DictBreaker(self.break_parser, breaks, default_conds, 40), DictIndenter(indents, 2))
         return self.scala_def(formatters)
 
     def scala_val_default(self) -> Expectation:

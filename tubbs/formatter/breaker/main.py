@@ -14,7 +14,7 @@ from tubbs.formatter.base import Formatter, VimFormatterMeta
 from tubbs.formatter.breaker.strict import StrictBreak
 from tubbs.formatter.breaker.breaks import Breaks
 from tubbs.formatter.breaker.rules import BreakRules
-from tubbs.formatter.breaker.cond import BreakCond, CondBreak
+from tubbs.formatter.breaker.cond import BreakCond, CondBreak, NoBreak
 from tubbs.tatsu.break_dsl import Parser
 from tubbs.formatter.breaker.dsl import parse_break_expr
 
@@ -34,8 +34,7 @@ Handler = Callable[[], BreakCond]
 
 class BreakerBase(Formatter[BreakCond]):
 
-    def __init__(self, parser: Parser, textwidth: int) -> None:
-        self.parser = parser
+    def __init__(self, textwidth: int) -> None:
         self.textwidth = textwidth
 
     @abc.abstractproperty
@@ -129,8 +128,8 @@ class BreakerBase(Formatter[BreakCond]):
 
 class Breaker(BreakerBase):
 
-    def __init__(self, parser: Parser, rules: BreakRules, textwidth: int) -> None:
-        super().__init__(parser, textwidth)
+    def __init__(self, rules: BreakRules, textwidth: int) -> None:
+        super().__init__(textwidth)
         self.rules = rules
 
     def handler(self, attr: str) -> Maybe[Handler]:
@@ -143,17 +142,18 @@ class Breaker(BreakerBase):
 
 class DictBreaker(BreakerBase):
 
-    def __init__(self, parser: Parser, rules: Map, textwidth: int) -> None:
-        super().__init__(parser, textwidth)
+    def __init__(self, parser: Parser, rules: Map, conds: Map[str, Callable], textwidth: int) -> None:
+        super().__init__(textwidth)
+        self.parser = parser
         self.rules = rules
-        self.extra_conds = None
+        self.conds = conds
 
     def handler(self, attr: str) -> Maybe[Handler]:
-        return self.rules.lift(attr) / parse_break_expr(self.parser, self.extra_conds)
+        return self.rules.lift(attr) / L(parse_break_expr)(self.parser, _, self.conds) / (lambda a: lambda: a)
 
     @property
     def default_handler(self) -> Handler:
-        return lambda: List()
+        return lambda: NoBreak()
 
 
 class VimDictBreaker(DictBreaker, VimCallback, metaclass=VimFormatterMeta):
@@ -169,9 +169,9 @@ class VimDictBreaker(DictBreaker, VimCallback, metaclass=VimFormatterMeta):
             )
         return data.valmap(convert)
 
-    def __init__(self, parser: Parser, vim: NvimFacade, rules: Map) -> None:
+    def __init__(self, vim: NvimFacade, parser: Parser, rules: Map, conds: Map[str, Callable]) -> None:
         tw = vim.buffer.options('textwidth') | 120
-        super().__init__(parser, rules, tw)
+        super().__init__(parser, rules, conds, tw)
 
 
 __all__ = ('Breaker', 'DictBreaker', 'VimDictBreaker')

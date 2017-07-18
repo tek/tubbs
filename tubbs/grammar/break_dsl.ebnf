@@ -1,9 +1,9 @@
 @@whitespace :: / /
 @@keyword :: or and not
 
-orkw = 'or';
-andkw = 'and';
-notkw = 'not';
+or = '|';
+and = '&';
+not = '~';
 lpar = '(';
 rpar = ')';
 at = '@';
@@ -41,16 +41,20 @@ cond::Cond =
   name:name lpar (comma).{args:arg}+ rpar
   ;
 
+condStrict::CondStrict =
+  name:name
+  ;
+
 orCond::OrCond =
-  left:expr orkw right:expr
+  left:expr or right:expr
   ;
 
 andCond::AndCond =
-  left:expr andkw right:expr
+  left:expr and right:expr
   ;
 
 notExpr::NotCond =
-  notkw expr:expr
+  not expr:expr
   ;
 
 compoundExpr =
@@ -76,7 +80,7 @@ expr =
   | parensExpr
   | compoundExpr
   | cond
-  | name
+  | condStrict
   | prio
   ;
 

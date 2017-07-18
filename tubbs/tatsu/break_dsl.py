@@ -40,7 +40,14 @@ class Cond(Expr):
 
     @property
     def arguments(self) -> List[Arg]:
-        return Lists.wrap(self.args)
+        return Lists.wrap(self.args) if isinstance(self.args, list) else List(self.args)
+
+
+class CondStrict(Expr):
+
+    @property
+    def cond(self) -> str:
+        return self.name.data
 
 
 class OrCond(Expr):
@@ -75,7 +82,7 @@ class Top(Expr):
 
     @property
     def conds(self) -> List[Side]:
-        return Lists.wrap(self.sides)
+        return Lists.wrap(self.sides) if isinstance(self.sides, list) else List(self.sides)
 
 
 class Parser(BuiltinParser):
@@ -94,7 +101,7 @@ class Parser(BuiltinParser):
     @property
     def semantics(self) -> bool:
         types = [Expr, Name, Cond, OrCond, AndCond, NotCond, Parenthesized, PrioCond, LambdaExpr, Method, Top, Side,
-                 Prio]
+                 Prio, CondStrict]
         return ModelBuilderSemantics(types=types)
 
 

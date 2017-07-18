@@ -6,24 +6,29 @@ from amino.func import dispatch
 
 from tubbs.formatter.breaker.cond import BreakCond, BreakCondOr, BreakCondAnd, BreakCondSet
 from tubbs.tatsu.break_dsl import (Parser, Expr, OrCond, AndCond, NotCond, Prio, Name, Cond, LambdaExpr, Top, Side,
-                                   PrioCond)
+                                   PrioCond, CondStrict)
 from tubbs.formatter.breaker.conds import inv
 
 
 class Builder:
 
-    def __init__(self, conds: Map[str, Callable]) -> None:
+    def __init__(self, conds: Map[str, Any]) -> None:
         self.conds = conds
 
     @lazy
     def build(self) -> Callable[[Expr], Any]:
-        return dispatch(self, List(Name, Cond, OrCond, AndCond, NotCond, PrioCond, LambdaExpr, Top, Side, Prio), '')
+        types = List(Name, Cond, OrCond, AndCond, NotCond, PrioCond, LambdaExpr, Top, Side, Prio, CondStrict)
+        return dispatch(self, types, '')
 
     def name(self, expr: Name) -> str:
         return expr.data
 
     def lambda_expr(self, expr: LambdaExpr) -> Callable[[Any], Callable[..., bool]]:
         return expr.method_names.fold_left(_)(lambda z, a: getattr(z, a))
+
+    def cond_strict(self, expr: CondStrict) -> BreakCond:
+        name = expr.cond
+        return self.conds.lift(name).get_or_fail(f'invalid condition: {name}')
 
     def cond(self, expr: Cond) -> BreakCond:
         name = expr.cond
@@ -54,7 +59,7 @@ class Builder:
         return BreakCondSet(expr.conds / self.build)
 
 
-def parse_break_expr(parser: Parser, expr: str, conds: Map[str, Callable]) -> Either[str, BreakCond]:
+def parse_break_expr(parser: Parser, expr: str, conds: Map[str, Any]) -> Either[str, BreakCond]:
     ast = parser.parse(expr, 'top')
     return Builder(conds).build(ast.value)
 

@@ -35,7 +35,7 @@ class BreakDslSpec:
         return k(res).must(be_right(num))
 
     def set(self) -> Expectation:
-        expr = 'before:((1.1 @ condition(param, _.capitalize)) or 0.5 @ (boo and zoo)) + after:(0.2)'
+        expr = 'before:((1.1 @ condition(param, _.capitalize)) | 0.5 @ (boo & zoo)) + after:(0.2)'
         res = parse_break_expr(self.parser, expr, Map({'condition': condition}))
         state = BreakState(None, List())
         return (
