@@ -8,7 +8,6 @@ from tubbs.formatter.breaker.cond import BreakCond
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.conds import (multi_line_block, sibling, parent_rule, sibling_rule, sibling_valid, after,
                                            inv, multi_line_block_for)
-from tubbs.tatsu.break_dsl import Parser
 
 
 class ScalaBreakRules(BreakRules):
@@ -45,20 +44,20 @@ class ScalaBreakRules(BreakRules):
         return (
             parent_rule('param').prio(0.0) |
             (sibling_rule(_.rhs, 'block') & sibling_valid(_.rhs) & after('lbrace')).prio(0.3) |
-            inv(0.8)
+            inv(0.65)
         ).after
 
 
 class Breaker(BreakerBase):
 
-    def __init__(self, parser: Parser, textwidth: int) -> None:
-        super().__init__(parser, ScalaBreakRules(), textwidth)
+    def __init__(self, textwidth: int) -> None:
+        super().__init__(ScalaBreakRules(), textwidth)
 
 
 class VimBreaker(Breaker, VimCallback):
 
-    def __init__(self, parser: Parser, vim: NvimFacade) -> None:
+    def __init__(self, vim: NvimFacade) -> None:
         tw = vim.buffer.options('textwidth') | 120
-        super().__init__(parser, tw)
+        super().__init__(tw)
 
 __all__ = ('ScalaBreakRules', 'Breaker', 'VimBreaker')

@@ -113,7 +113,7 @@ class FormattingFacadeSpec:
 
     def scala_def_dict(self) -> Expectation:
         block_rhs = '(0.3 @ (sibling_rule(_.rhs, block) & sibling_valid(_.rhs) & after(lbrace)))'
-        breaks = Map(
+        break_rules = Map(
             case_block_body='before:(1.1 @ multi_line_block | 0.91)',
             case_clause='before:(1.0 @ multi_line_block_for(_.parent.parent.parent.parent) | 0.9)',
             block_body='before:1.1',
@@ -130,7 +130,7 @@ class FormattingFacadeSpec:
             block_body=1,
             rbrace=-1,
         )
-        formatters = List(DictBreaker(self.break_parser, breaks, default_conds, 40), DictIndenter(indents, 2))
+        formatters = List(DictBreaker(self.break_parser, break_rules, default_conds, 40), DictIndenter(indents, 2))
         return self.scala_def(formatters)
 
     def scala_val_default(self) -> Expectation:

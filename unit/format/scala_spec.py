@@ -136,7 +136,7 @@ class ScalaFormatSpec:
 
     def break_fun(self) -> Expectation:
         breaker = Breaker(37)
-        broken = breaker.format(self.fun_ast).value
+        broken = breaker.format(self.fun_ast)._value()
         return k(broken / _.join_lines).must(contain(broken_fun))
 
     def indent_broken(self) -> Expectation:

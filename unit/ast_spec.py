@@ -7,13 +7,13 @@ from kallikrein.matchers import contain
 from kallikrein.expectable import Expectable
 from amino import _, Either, Path, __
 
-from tubbs.tatsu.base import BuiltinParser
+from tubbs.tatsu.base import LangParser
 from tubbs.tatsu.ast import AstElem, ast_rose_tree
 
 from unit._support.ast import be_token
 
 
-class Parser(BuiltinParser):
+class Parser(LangParser):
 
     @property
     def module_base(self) -> str:
@@ -30,6 +30,10 @@ class Parser(BuiltinParser):
     @property
     def name(self) -> str:
         return 'spec1'
+
+    @property
+    def left_recursion(self) -> bool:
+        return False
 
 
 class AstSpec:
