@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Union
 
-from amino import List, L, Right, Map, Left, Either, __, _, Maybe, Eval, Boolean
+from amino import List, L, Right, Map, Either, __, _, Maybe, Eval, Boolean
 from amino.list import Lists
 
 from ribosome.nvim import NvimFacade
@@ -9,15 +9,16 @@ from ribosome.util.callback import VimCallback
 
 from tubbs.formatter.base import Formatter, VimFormatterMeta
 from tubbs.tatsu.ast import AstElem, ast_rose_tree, RoseAstTree, Line, RoseData
-from tubbs.formatter.indenter.indent import Indent, IndentHere
+from tubbs.formatter.indenter.indent import Indent
 from tubbs.formatter.indenter.state import IndentState
+from tubbs.formatter.indenter.cond import IndentCond, NoIndent, mk_indent
 
 
 IndentResult = Union[Indent, int]
-Handler = Callable[[RoseData], IndentResult]
+Handler = Callable[[], IndentCond]
 
 
-class IndenterBase(Formatter):
+class IndenterBase(Formatter[IndentCond]):
 
     def __init__(self, shiftwidth: int) -> None:
         self.shiftwidth = shiftwidth
@@ -46,14 +47,14 @@ class IndenterBase(Formatter):
         return (
             indents
             .group_by(_.line)
-            .valmap(__.max_by(lambda a: abs(a.indent)))
+            .valmap(__.max_by(lambda a: abs(a.amount)))
             .map2(lambda l, i: (l.lnum, self.indent_line(ast.indent, l, i)))
             .sort_by(_[0])
             .map(_[1])
         )
 
     def indent_line(self, baseline: int, line: Line, indent: Maybe[Indent]) -> str:
-        shifts = (indent / _.indent | 0)
+        shifts = (indent / _.amount | 0)
         ws = ' ' * ((shifts * self.shiftwidth) + baseline)
         return f'{ws}{line.trim}'
 
@@ -63,20 +64,14 @@ class IndenterBase(Formatter):
         return boundary(node.bol, 'bol') + boundary(node.eol, 'eol')
 
     def node_indent(self, state: IndentState) -> Either[str, Indent]:
-        result = self.lookup_handler(state.data)(state)
-        return (
-            Right(IndentHere(node=state.data, indent=result))
-            if isinstance(result, int) else
-            Right(result)
-            if isinstance(result, Indent) else
-            Left(f'invalid indent result {result} for {state.node}')
-        )
+        result = self.lookup_handler(state.data)()
+        return result.info(state).info.map2(L(mk_indent)(state.node, _, _))
 
 
 class IndentRules:
 
-    def default(self, node: RoseData) -> IndentResult:
-        return 0
+    def default(self) -> IndentCond:
+        return NoIndent()
 
 
 class Indenter(IndenterBase):
@@ -89,7 +84,7 @@ class Indenter(IndenterBase):
         return Maybe.getattr(self.rules, name)
 
     @property
-    def default_handler(self) -> Callable[[RoseData], IndentResult]:
+    def default_handler(self) -> Handler:
         return self.rules.default
 
 
@@ -104,7 +99,7 @@ class DictIndenter(IndenterBase):
 
     @property
     def default_handler(self) -> Handler:
-        return lambda node: 0
+        return lambda: NoIndent()
 
 
 class VimDictIndenter(DictIndenter, VimCallback, metaclass=VimFormatterMeta):

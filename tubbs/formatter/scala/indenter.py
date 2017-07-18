@@ -1,23 +1,22 @@
 from ribosome.nvim import NvimFacade
 
 from tubbs.formatter.indenter.main import Indenter as IndenterBase, IndentResult, IndentRules
-from tubbs.formatter.indenter.state import IndentState
-from tubbs.formatter.indenter.indent import keep, after, from_here, children
+from tubbs.formatter.indenter.conds import inv, sibling_indent
 
 
 class ScalaIndentRules(IndentRules):
 
-    def assign_eol(self, state: IndentState) -> IndentResult:
-        return after(state.data, 1)
+    def assign_eol(self) -> IndentResult:
+        return inv.after
 
-    def block_body_bol(self, state: IndentState) -> IndentResult:
-        return children(state.data, 1)
+    def block_body_bol(self) -> IndentResult:
+        return inv.children
 
-    def case_clauses_bol(self, state: IndentState) -> IndentResult:
-        return children(state.data, 1)
+    def case_clauses_bol(self) -> IndentResult:
+        return inv.children
 
-    def apply_expr_chain_app_bol(self, state: IndentState) -> IndentResult:
-        return keep(state.data) if state.sibling_indent else from_here(state.data, 1)
+    def apply_expr_chain_app_bol(self) -> IndentResult:
+        return sibling_indent.keep | inv.from_here
 
 
 class Indenter(IndenterBase):

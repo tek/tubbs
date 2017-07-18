@@ -5,8 +5,9 @@ from amino.lazy import lazy
 
 from ribosome.record import Record, int_field, list_field, field
 
-from tubbs.formatter.indenter.indent import Indent, IndentChildren, IndentFromHere, IndentHere, IndentAfter
+from tubbs.formatter.indenter.indent import Indent
 from tubbs.tatsu.ast import RoseAstTree, RoseData
+from tubbs.formatter.indenter.info import Children, FromHere, Here, After
 
 
 class IndentState(Record):
@@ -18,29 +19,29 @@ class IndentState(Record):
 
     def push_here(self, new: Indent) -> 'IndentState':
         add = new.inc(self.current)
-        self.log.ddebug(lambda: f'indent for {add.node}: {add.indent}')
+        self.log.ddebug(lambda: f'indent for {add.node}: {add.amount}')
         return self.append1.indents(add)
 
     def update_current(self, update: Indent) -> 'IndentState':
-        current = update.indent if update.absolute else self.current + update.indent
+        current = update.amount if update.absolute else self.current + update.amount
         self.log.ddebug(lambda: f'push current: {update} {current}')
         return self.set(current=current).append1.stack(update)
 
     def push_sub(self, new: Indent) -> 'IndentState':
-        keep = Indent(node=new.node, indent=0)
-        add_stack = new if isinstance(new, (IndentChildren, IndentFromHere)) else keep
-        add_indents = new if isinstance(new, (IndentHere, IndentFromHere)) else keep
-        s1 = self if new.indent == 0 else self.append1.incs(new)
+        keep = Indent(node=new.node, amount=0, range=Here)
+        add_stack = new if new.range in (Children, FromHere) else keep
+        add_indents = new if new.range in (Here, FromHere) else keep
+        s1 = self if new.amount == 0 else self.append1.incs(new)
         return s1.push_here(add_indents).update_current(add_stack)
 
     def push_after(self, new: Indent) -> 'IndentState':
-        return self.update_current(new) if isinstance(new, (IndentAfter, IndentFromHere)) else self
+        return self.update_current(new) if new.range in (After, FromHere) else self
 
     def pop(self, start: Indent) -> 'IndentState':
         index = self.stack.index_where(lambda a: a.node == start.node) | -1
         before = self.stack[:index]
         after = self.stack[index:]
-        dec = sum(after.map(_.indent))
+        dec = sum(after.map(_.amount))
         self.log.ddebug(lambda: f'pop: {start} {dec}')
         return self.set(current=self.current - dec, stack=before)
 

@@ -67,10 +67,10 @@ class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
     # with default rules $scala_def_default
-    with custom rules in a dict $scala_def_dict
+    # with custom rules in a dict $scala_def_dict
 
     break a scala val
-    # with default rules $scala_val_default
+    with default rules $scala_val_default
 
     # broken apply expression with case clauses $broken_apply
     '''
@@ -100,6 +100,7 @@ class FormattingFacadeSpec:
     def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
         result = facade.format(lines, (9, 10))._value().lines
+        print(result.join_lines)
         return k(result) == Lists.lines(target)
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:
