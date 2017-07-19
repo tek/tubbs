@@ -6,6 +6,7 @@ from ribosome.machine.transition import Fatal
 from ribosome.request.base import parse_int
 
 from amino import __, L, _, Task, Either, Maybe, Right, List, Map
+from amino.util.string import snake_case
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
@@ -108,7 +109,7 @@ class CoreTransitions(TubbsTransitions):
         def cons(tpe: type) -> Formatter:
             return tpe(self.vim, tpe.convert_data(Map(rules)))  # type: ignore
         return (
-            Either.import_name('{}.base'.format(formatter_mod), 'VimDict{}'.format(name)) /
+            Either.import_name('{}.{}.main'.format(formatter_mod, snake_case(name)), 'VimDict{}'.format(name)) /
             cons
         )
 

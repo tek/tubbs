@@ -1,6 +1,9 @@
 import abc
 from typing import Callable, Any
 
+from amino.util.string import ToStr
+from amino import List
+
 from tubbs.formatter.indenter.state import IndentState
 from tubbs.formatter.indenter.indent import Indent
 from tubbs.formatter.indenter import info
@@ -12,7 +15,7 @@ def mk_indent(node: RoseAstTree, amount: int, range: Range) -> Indent:
     return Indent(node=node, amount=amount, range=range)
 
 
-class IndentCond(abc.ABC):
+class IndentCond(ToStr):
 
     @abc.abstractmethod
     def info(self, state: IndentState) -> IndentInfo:
@@ -52,6 +55,10 @@ class Invariant(IndentCond):
     def info(self, state: IndentState) -> IndentInfo:
         return info.Empty()
 
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List()
+
 
 class IndentCondAlg(IndentCond):
 
@@ -65,11 +72,19 @@ class IndentCondOr(IndentCondAlg):
     def info(self, state: IndentState) -> Indent:
         return self.left.info(state) or self.right.info(state)
 
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(f'{self.left} | {self.right}')
+
 
 class IndentCondAnd(IndentCondAlg):
 
     def info(self, state: IndentState) -> Indent:
         return self.left.info(state) and self.right.info(state)
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(f'{self.left} & {self.right}')
 
 
 class IndentCondNest(IndentCond):
@@ -87,6 +102,10 @@ class IndentCondRange(IndentCondNest):
     def info(self, state: IndentState) -> IndentInfo:
         return self.cond.info(state).range(self._range)
 
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.cond, self._range)
+
 
 class IndentCondAmount(IndentCondNest):
 
@@ -97,11 +116,19 @@ class IndentCondAmount(IndentCondNest):
     def info(self, state: IndentState) -> IndentInfo:
         return self.cond.info(state).amount(self._amount.value)
 
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.cond, self._amount)
+
 
 class NoIndent(IndentCond):
 
     def info(self, state: IndentState) -> IndentInfo:
-        return info.Skip()
+        return info.SkipRange()
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List()
 
 PC = Callable[[IndentState], bool]
 
@@ -118,6 +145,10 @@ class PredCond(IndentCond):
 
     def info(self, state: IndentState) -> Indent:
         return info.Empty() if self.f(state) else info.Invalid(f'{self._desc} failed')
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._desc)
 
 
 def pred_cond(desc: str) -> Callable[[PC], IndentCond]:

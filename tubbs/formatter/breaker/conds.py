@@ -3,6 +3,8 @@ from typing import Callable
 from amino.tree import SubTree
 from amino import Boolean, Map
 
+from ribosome.logging import ribo_log
+
 from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.cond import pred_cond, pred_cond_f, BreakCond, Invariant
@@ -30,6 +32,11 @@ def multi_line_block_for(state: BreakState, attr: Callable[[RoseAstTree], RoseAs
     return multi_line_node(attr(state.node))
 
 
+@pred_cond_f('multi line block in parent with rule')
+def multi_line_block_parent(state: BreakState, rule: str) -> Boolean:
+    return state.node.parent_with_rule(rule).exists(multi_line_node)
+
+
 @pred_cond_f('sibling break')
 def sibling(state: BreakState, attr: Callable[[SubTree], SubTree]) -> Callable[[BreakState], Boolean]:
     return state.sibling(attr)
@@ -55,8 +62,9 @@ def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
     return state.after(rule)
 
 
-default_conds = Map(
+default_break_conds = Map(
     multi_line_block_for=multi_line_block_for,
+    multi_line_block_parent=multi_line_block_parent,
     multi_line_block=multi_line_block,
     sibling=sibling,
     parent_rule=parent_rule,
@@ -66,4 +74,4 @@ default_conds = Map(
 )
 
 __all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after',
-           'multi_line_block_for', 'default_conds')
+           'multi_line_block_for', 'default_break_conds')

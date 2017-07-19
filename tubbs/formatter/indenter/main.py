@@ -12,6 +12,8 @@ from tubbs.tatsu.ast import AstElem, ast_rose_tree, RoseAstTree, Line, RoseData
 from tubbs.formatter.indenter.indent import Indent
 from tubbs.formatter.indenter.state import IndentState
 from tubbs.formatter.indenter.cond import IndentCond, NoIndent, mk_indent
+from tubbs.tatsu.indent_dsl import Parser
+from tubbs.formatter.indenter.dsl import parse_indent_expr
 
 
 IndentResult = Union[Indent, int]
@@ -90,12 +92,14 @@ class Indenter(IndenterBase):
 
 class DictIndenter(IndenterBase):
 
-    def __init__(self, rules: Map, shiftwidth: int) -> None:
+    def __init__(self, parser: Parser, rules: Map, conds: Map[str, Callable], shiftwidth: int) -> None:
         super().__init__(shiftwidth)
+        self.parser = parser
         self.rules = rules
+        self.conds = conds
 
-    def handler(self, name: str) -> Maybe[Handler]:
-        return self.rules.lift(name) / (lambda a: lambda node: a)
+    def handler(self, attr: str) -> Maybe[Handler]:
+        return self.rules.lift(attr) / L(parse_indent_expr)(self.parser, _, self.conds) / (lambda a: lambda: a)
 
     @property
     def default_handler(self) -> Handler:
@@ -104,9 +108,9 @@ class DictIndenter(IndenterBase):
 
 class VimDictIndenter(DictIndenter, VimCallback, metaclass=VimFormatterMeta):
 
-    def __init__(self, vim: NvimFacade, rules: Map) -> None:
+    def __init__(self, vim: NvimFacade, parser: Parser, rules: Map, conds: Map[str, Callable]) -> None:
         sw = vim.options('shiftwidth') | 2
-        super().__init__(rules, sw)
+        super().__init__(parser, rules, conds, sw)
 
 
 __all__ = ('Indenter', 'DictIndenter', 'VimDictIndenter')

@@ -57,7 +57,9 @@ object Ob2 {
   (par2a: Tpe2, par2b: Tpe2)
   (implicit par3: Tpe3, par4: Tpe4) = {
     val a = par1a match {
-      case _: Tpe1 => { println("Tpe1") }
+      case _: Tpe1 => {
+        println("Tpe1")
+      }
       case Tpe2(f) => par1b map f
       case _ => {
         val v1 = fun2(par1);
@@ -138,21 +140,25 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         return self._buffer_content(List.lines(format_at_def_target))
 
     def dict(self) -> Expectation:
-        breaks = Map(
-            map_case_clause=('casekw', 1.0, 0.0),
-            map_block_body=('head', 0.9, 0.0),
-            list_block_rest_stat=('stat', 0.9, 0.0),
-            token_seminl_semi=('semi', 0.0, 1.1),
-            token_lbrace=('lbrace', 0.0, 1.0),
-            token_rbrace=('rbrace', 1.0, 0.0),
-            map_implicit_param_clause=('lpar', 0.9, 0.1),
+        block_rhs = '(0.3 @ (sibling_rule(_.rhs, block) & sibling_valid(_.rhs) & after(lbrace)))'
+        break_rules = Map(
+            case_block_body='before:((1.1 @ multi_line_block) | 0.91)',
+            case_clause='before:((1.0 @ multi_line_block_parent(caseBlock)) | 0.9)',
+            block_body='before:((1.1 @ multi_line_block) | 0.9)',
+            block_rest_stat='before:0.8',
+            seminl_semi='after:1.1',
+            lbrace='after:((1.0 @ multi_line_block) | 0.31)',
+            rbrace='before:((1.0 @ multi_line_block) | (1.0 @ sibling(_.body)) | (1.0 @ sibling(_.brace)) | 0.31)',
+            param_clause='before:0.7',
+            implicit_param_clause='before:0.75',
+            assign=f'after:((0.0 @ parent_rule(param)) | {block_rhs} | 0.8)',
         )
-        indents = Map(
-            case_clauses=1,
-            block_body=1,
+        indent_rules = Map(
+            assign_eol='after',
+            apply_expr_chain_app_bol='here:sibling_indent | from_here',
         )
-        self.vim.vars.set_p('scala_breaks', breaks)
-        self.vim.vars.set_p('scala_indents', indents)
+        self.vim.vars.set_p('scala_breaks', break_rules)
+        self.vim.vars.set_p('scala_indents', indent_rules)
         self.setup_formatexpr()
         self.vim.window.set_cursor(9)
         self.vim.cmd_sync('normal gqq')

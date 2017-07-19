@@ -10,7 +10,7 @@ from toolz import dissoc, valfilter
 
 from ribosome.record import Record, str_field, int_field, field
 
-from amino import List, _, Maybe, Map, Boolean, LazyList, L
+from amino import List, _, Maybe, Map, Boolean, LazyList, L, Just, Either
 from amino.tree import Node, ListNode, MapNode, LeafNode, Inode, SubTree
 from amino.list import Lists
 from amino.bi_rose_tree import RoseTree, BiRoseTree
@@ -592,6 +592,11 @@ class RoseAstTree(RoseTree[RoseData]):
     @property
     def endpos(self) -> int:
         return self.ast.endpos
+
+    def parent_with_rule(self, rule: str) -> Either[str, 'RoseAstTree']:
+        def loop(cur: RoseAstTree) -> Maybe[RoseAstTree]:
+            return Just(cur) if cur.rule == rule else loop(cur.parent)
+        return loop(self.parent).to_either(f'no parent with rule `{rule}` for {self}')
 
 
 class RoseAstElem(BiRoseTree[RoseData], RoseAstTree):

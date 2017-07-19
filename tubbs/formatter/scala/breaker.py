@@ -7,7 +7,7 @@ from tubbs.formatter.breaker.main import Breaker as BreakerBase
 from tubbs.formatter.breaker.cond import BreakCond
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.conds import (multi_line_block, sibling, parent_rule, sibling_rule, sibling_valid, after,
-                                           inv, multi_line_block_for)
+                                           inv, multi_line_block_parent)
 
 
 class ScalaBreakRules(BreakRules):
@@ -15,9 +15,8 @@ class ScalaBreakRules(BreakRules):
     def case_block_body(self) -> BreakCond:
         return (multi_line_block.prio(1.1) | inv(0.91)).before
 
-    # TODO __.parent_with_rule('caseBlock')
     def case_clause(self) -> BreakCond:
-        return (multi_line_block_for(_.parent.parent.parent.parent).prio(1.0) | inv(0.9)).before
+        return (multi_line_block_parent('caseBlock').prio(1.0) | inv(0.9)).before
 
     def param_clause(self) -> BreakCond:
         return inv(0.7).before
@@ -38,7 +37,13 @@ class ScalaBreakRules(BreakRules):
         return (multi_line_block.prio(1.0) | inv(0.31)).after
 
     def rbrace(self) -> BreakCond:
-        return (multi_line_block.prio(1.0) | sibling(_.body).prio(1.0) | sibling(_.lbrace).prio(1.0) | inv(0.31)).before
+        return (
+            multi_line_block.prio(1.0) |
+            sibling(_.body).prio(1.0) |
+            sibling(_.body.head).prio(1.0) |
+            sibling(_.lbrace).prio(1.0) |
+            inv(0.31)
+        ).before
 
     def assign(self) -> BreakCond:
         return (

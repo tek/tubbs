@@ -1,7 +1,8 @@
 import abc
 from typing import Tuple
 
-from amino import Either, Left, Right
+from amino import Either, Left, Right, List
+from amino.util.string import ToStr
 
 
 class Range:
@@ -19,15 +20,20 @@ Here = Range('Here')
 After = Range('After')
 FromHere = Range('FromHere')
 Children = Range('Children')
+Skip = Range('Skip')
 
 
-class Amount:
+class Amount(ToStr):
 
     def __init__(self, value: int) -> None:
-        self.value: amount = value
+        self.value = value
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.value)
 
 
-class IndentInfo:
+class IndentInfo(ToStr):
 
     @abc.abstractmethod
     def amount(self, amount: int) -> 'IndentInfo':
@@ -53,6 +59,10 @@ class Incomplete(IndentInfo):
     @property
     def info(self) -> Either[str, Tuple[int, Range]]:
         return Left(self._error)
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._error)
 
 
 class Empty(Incomplete):
@@ -83,12 +93,6 @@ class Invalid(Incomplete):
     def amount(self, amount: int) -> IndentInfo:
         return self
 
-    def __str__(self) -> str:
-        return f'Invalid({self.error})'
-
-    def __repr__(self) -> str:
-        return str(self)
-
 
 class HasAmount:
 
@@ -98,18 +102,19 @@ class HasAmount:
 
 class IndentAmount(HasAmount, Incomplete):
 
+    def __init__(self, amount: int) -> None:
+        self._amount = amount
+
     @property
     def _error(self) -> str:
         return 'range was not set'
 
-    def __init__(self, amount: int) -> None:
-        self._prio = amount
-
     def range(self, range: Range) -> IndentInfo:
-        return IndentAmountRange(self._prio, range)
+        return IndentAmountRange(self._amount, range)
 
-    def __str__(self) -> str:
-        return f'IndentAmount({self._prio})'
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._amount)
 
 
 class HasRange:
@@ -120,31 +125,40 @@ class HasRange:
 
 class IndentRange(HasRange, Incomplete):
 
+    def __init__(self, range: Range) -> None:
+        self._range = range
+
     @property
     def _error(self) -> str:
         return 'amount was not set'
 
-    def __init__(self, range: Range) -> None:
-        self._range = range
-
     def amount(self, amount: int) -> IndentInfo:
         return IndentAmountRange(amount, self._range)
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._range)
 
 
 class IndentAmountRange(HasRange, HasAmount, IndentInfo):
 
     def __init__(self, amount: int, range: Range) -> None:
-        self._prio = amount
+        self._amount = amount
         self._range = range
 
     @property
     def info(self) -> Either[str, Tuple[int, Range]]:
-        return Right((self._prio, self._range))
+        return Right((self._amount, self._range))
+
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._range, self._amount)
 
 
-class Skip(IndentAmountRange):
+class SkipRange(IndentAmountRange):
 
     def __init__(self) -> None:
         super().__init__(0, Here)
 
-__all__ = ()
+__all__ = ('Range', 'Here', 'After', 'FromHere', 'Children', 'Skip', 'Amount', 'IndentInfo', 'Incomplete', 'Empty',
+           'Invalid', 'IndentAmount', 'IndentRange', 'IndentAmountRange', 'SkipRange')

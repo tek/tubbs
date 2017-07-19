@@ -149,10 +149,17 @@ class BreakPrioPos(HasPos, HasPrio, BreakInfo):
     def info(self) -> Either[str, Tuple[float, BreakSide]]:
         return Right((self._prio, self._pos))
 
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}({self._prio}, {self._pos})'
+
 
 class Skip(BreakPrioPos):
 
-    def __init__(self) -> None:
+    def __init__(self, desc: str) -> None:
         super().__init__(0.0, Before())
+        self.desc = desc
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}({self.desc})'
 
 __all__ = ('BreakInfo',)

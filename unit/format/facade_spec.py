@@ -1,5 +1,6 @@
 from tubbs.tatsu.scala import Parser
 from tubbs.tatsu.break_dsl import Parser as BreakParser
+from tubbs.tatsu.indent_dsl import Parser as IndentParser
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter
@@ -7,7 +8,8 @@ from tubbs.formatter.indenter.main import DictIndenter
 from tubbs.formatter.breaker.main import DictBreaker
 from tubbs.formatter.scala.breaker import Breaker
 from tubbs.formatter.scala.indenter import Indenter
-from tubbs.formatter.breaker.conds import default_conds
+from tubbs.formatter.breaker.conds import default_break_conds
+from tubbs.formatter.indenter.conds import default_indent_conds
 
 from kallikrein.expectation import Expectation
 from kallikrein import k
@@ -66,13 +68,13 @@ def_def = '''def foo = {
 class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
-    # with default rules $scala_def_default
-    # with custom rules in a dict $scala_def_dict
+    with default rules $scala_def_default
+    with custom rules in a dict $scala_def_dict
 
     break a scala val
     with default rules $scala_val_default
 
-    # broken apply expression with case clauses $broken_apply
+    broken apply expression with case clauses $broken_apply
     '''
 
     def setup(self) -> None:
@@ -84,6 +86,8 @@ class FormattingFacadeSpec:
         self.parser.gen()
         self.break_parser = BreakParser()
         self.break_parser.gen()
+        self.indent_parser = IndentParser()
+        self.indent_parser.gen()
 
     def facade(self, formatters: List[Formatter]) -> FormattingFacade:
         hints = Hints()
@@ -100,7 +104,6 @@ class FormattingFacadeSpec:
     def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
         facade = self.facade(formatters)
         result = facade.format(lines, (9, 10))._value().lines
-        print(result.join_lines)
         return k(result) == Lists.lines(target)
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:
@@ -115,9 +118,9 @@ class FormattingFacadeSpec:
     def scala_def_dict(self) -> Expectation:
         block_rhs = '(0.3 @ (sibling_rule(_.rhs, block) & sibling_valid(_.rhs) & after(lbrace)))'
         break_rules = Map(
-            case_block_body='before:(1.1 @ multi_line_block | 0.91)',
-            case_clause='before:(1.0 @ multi_line_block_for(_.parent.parent.parent.parent) | 0.9)',
-            block_body='before:1.1',
+            case_block_body='before:((1.1 @ multi_line_block) | 0.91)',
+            case_clause='before:((1.0 @ multi_line_block_parent(caseBlock)) | 0.9)',
+            block_body='before:((1.1 @ multi_line_block) | 0.9)',
             block_rest_stat='before:0.8',
             seminl_semi='after:1.1',
             lbrace='after:((1.0 @ multi_line_block) | 0.31)',
@@ -126,12 +129,16 @@ class FormattingFacadeSpec:
             implicit_param_clause='before:0.75',
             assign=f'after:((0.0 @ parent_rule(param)) | {block_rhs} | 0.8)',
         )
-        indents = Map(
-            case_clauses=1,
-            block_body=1,
-            rbrace=-1,
+        indent_rules = Map(
+            assign_eol='after',
+            block_body_bol='children',
+            case_clauses_bol='children',
+            apply_expr_chain_app_bol='here:sibling_indent | from_here',
         )
-        formatters = List(DictBreaker(self.break_parser, break_rules, default_conds, 40), DictIndenter(indents, 2))
+        formatters = List(
+            DictBreaker(self.break_parser, break_rules, default_break_conds, 40),
+            DictIndenter(self.indent_parser, indent_rules, default_indent_conds, 2)
+        )
         return self.scala_def(formatters)
 
     def scala_val_default(self) -> Expectation:

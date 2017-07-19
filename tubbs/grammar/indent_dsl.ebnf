@@ -1,0 +1,114 @@
+@@whitespace :: / /
+@@keyword :: or and not
+
+or = '|';
+and = '&';
+not = '~';
+lpar = '(';
+rpar = ')';
+at = '@';
+wildcard = '_';
+dot = '.';
+comma = ',';
+plus = '+';
+colon = ':';
+here = 'here';
+fromHere = 'from_here';
+after = 'after';
+children = 'children';
+skip = 'skip';
+
+int::int =
+  /\d+\.\d+/
+  ;
+
+@name
+name::Name =
+  data:/[a-zA-z_][a-zA-z0-9_]*/
+  ;
+
+method::Method =
+  dot name:name
+  ;
+
+lambda::LambdaExpr =
+  wildcard methods:{method}+
+  ;
+
+arg =
+  | lambda
+  | name
+  ;
+
+cond::Cond =
+  name:name lpar (comma).{args:arg}+ rpar
+  ;
+
+condStrict::CondStrict =
+  name:name
+  ;
+
+orCond::OrCond =
+  left:expr or right:expr
+  ;
+
+andCond::AndCond =
+  left:expr and right:expr
+  ;
+
+notExpr::NotCond =
+  not expr:expr
+  ;
+
+compoundExpr =
+  | orCond
+  | andCond
+  | notExpr
+  ;
+
+parensExpr =
+  lpar @:expr rpar
+  ;
+
+amount::Amount =
+  value:int
+  ;
+
+amountCound::AmountCond =
+  amount:amount at expr:expr
+  ;
+
+rangeExpr =
+  | here
+  | fromHere
+  | after
+  | children
+  | skip
+  ;
+
+range::Range =
+  value:rangeExpr
+  ;
+
+rangeCond::RangeCond =
+  range:range colon expr:expr
+  ;
+
+topExpr =
+  | parensExpr
+  | compoundExpr
+  | amountCound
+  | rangeCond
+  | range
+  ;
+
+top::Top =
+  expr:topExpr
+  ;
+
+expr =
+  | topExpr
+  | cond
+  | condStrict
+  | amount
+  ;
