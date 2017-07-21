@@ -1,6 +1,6 @@
 from typing import Callable, Any
 
-from tubbs.tatsu.break_dsl import Parser
+from tubbs.tatsu.breaker_dsl import Parser
 from tubbs.formatter.breaker.dsl import parse_break_expr
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.cond import (pred_cond_f, BreakCondSet, BreakCondPos, BreakCondOr, BreakCondPrio,

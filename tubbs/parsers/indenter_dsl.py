@@ -26,7 +26,7 @@ KEYWORDS = {
 }  # type: ignore
 
 
-class IndentDslBuffer(Buffer):
+class IndenterDslBuffer(Buffer):
     def __init__(
         self,
         text,
@@ -38,7 +38,7 @@ class IndentDslBuffer(Buffer):
         namechars='',
         **kwargs
     ):
-        super(IndentDslBuffer, self).__init__(
+        super(IndenterDslBuffer, self).__init__(
             text,
             whitespace=whitespace,
             nameguard=nameguard,
@@ -50,7 +50,7 @@ class IndentDslBuffer(Buffer):
         )
 
 
-class IndentDslParser(Parser):
+class IndenterDslParser(Parser):
     def __init__(
         self,
         whitespace=' ',
@@ -62,12 +62,12 @@ class IndentDslParser(Parser):
         parseinfo=True,
         keywords=None,
         namechars='',
-        buffer_class=IndentDslBuffer,
+        buffer_class=IndenterDslBuffer,
         **kwargs
     ):
         if keywords is None:
             keywords = KEYWORDS
-        super(IndentDslParser, self).__init__(
+        super(IndenterDslParser, self).__init__(
             whitespace=whitespace,
             nameguard=nameguard,
             comments_re=comments_re,
@@ -367,7 +367,7 @@ class IndentDslParser(Parser):
             self._error('no available options')
 
 
-class IndentDslSemantics(object):
+class IndenterDslSemantics(object):
     def or_(self, ast):  # noqa
         return ast
 
@@ -480,7 +480,7 @@ class IndentDslSemantics(object):
 def main(filename, startrule, **kwargs):
     with open(filename) as f:
         text = f.read()
-    parser = IndentDslParser()
+    parser = IndenterDslParser()
     return parser.parse(text, startrule, filename=filename, **kwargs)
 
 
@@ -488,7 +488,7 @@ if __name__ == '__main__':
     import json
     from tatsu.util import asjson
 
-    ast = generic_main(main, IndentDslParser, name='IndentDsl')
+    ast = generic_main(main, IndenterDslParser, name='IndenterDsl')
     print('AST:')
     print(ast)
     print()

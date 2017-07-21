@@ -26,7 +26,7 @@ KEYWORDS = {
 }  # type: ignore
 
 
-class BreakDslBuffer(Buffer):
+class BreakerDslBuffer(Buffer):
     def __init__(
         self,
         text,
@@ -38,7 +38,7 @@ class BreakDslBuffer(Buffer):
         namechars='',
         **kwargs
     ):
-        super(BreakDslBuffer, self).__init__(
+        super(BreakerDslBuffer, self).__init__(
             text,
             whitespace=whitespace,
             nameguard=nameguard,
@@ -50,7 +50,7 @@ class BreakDslBuffer(Buffer):
         )
 
 
-class BreakDslParser(Parser):
+class BreakerDslParser(Parser):
     def __init__(
         self,
         whitespace=' ',
@@ -62,12 +62,12 @@ class BreakDslParser(Parser):
         parseinfo=True,
         keywords=None,
         namechars='',
-        buffer_class=BreakDslBuffer,
+        buffer_class=BreakerDslBuffer,
         **kwargs
     ):
         if keywords is None:
             keywords = KEYWORDS
-        super(BreakDslParser, self).__init__(
+        super(BreakerDslParser, self).__init__(
             whitespace=whitespace,
             nameguard=nameguard,
             comments_re=comments_re,
@@ -336,7 +336,7 @@ class BreakDslParser(Parser):
         )
 
 
-class BreakDslSemantics(object):
+class BreakerDslSemantics(object):
     def or_(self, ast):  # noqa
         return ast
 
@@ -434,7 +434,7 @@ class BreakDslSemantics(object):
 def main(filename, startrule, **kwargs):
     with open(filename) as f:
         text = f.read()
-    parser = BreakDslParser()
+    parser = BreakerDslParser()
     return parser.parse(text, startrule, filename=filename, **kwargs)
 
 
@@ -442,7 +442,7 @@ if __name__ == '__main__':
     import json
     from tatsu.util import asjson
 
-    ast = generic_main(main, BreakDslParser, name='BreakDsl')
+    ast = generic_main(main, BreakerDslParser, name='BreakerDsl')
     print('AST:')
     print(ast)
     print()

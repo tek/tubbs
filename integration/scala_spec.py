@@ -72,20 +72,21 @@ object Ob2 {
 format_dict_def_target = '''package pack
 
 object Ob2 {
-  def fun1[TPar1 <: UB1: TC1](par1a: Tpe1, par1b: Tpe1)
+  def fun1[TPar1 <: UB1: TC1]
+  (par1a: Tpe1, par1b: Tpe1)
   (par2a: Tpe2, par2b: Tpe2)
   (implicit par3: Tpe3, par4: Tpe4) = {
-    val a = par1a match {
-      case _: Tpe1 => {
-        println("Tpe1")
-        }
-        case Tpe2(f) => par1b map f
-        case _ => {
-          val v1 = fun2(par1);
-          fun3(v1)
-          }
-          }
-          }
+  val a = par1a match {
+    case _: Tpe1 => {
+    println("Tpe1")
+    }
+    case Tpe2(f) => par1b map f
+    case _ => {
+    val v1 = fun2(par1);
+    fun3(v1)
+    }
+  }
+  }
 }'''
 
 
@@ -155,6 +156,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         )
         indent_rules = Map(
             assign_eol='after',
+            case_clauses_bol='children',
             apply_expr_chain_app_bol='here:sibling_indent | from_here',
         )
         self.vim.vars.set_p('scala_breaks', break_rules)

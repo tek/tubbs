@@ -154,7 +154,9 @@ class Parsers(Record):
 
     def _load(self, name: str) -> Either[str, 'Parsers']:
         def update(parser_ctor: type) -> Parsers:
-            return self.modder.parsers(_ + (name, parser_ctor()))
+            parser = parser_ctor()
+            parser.gen()
+            return self.modder.parsers(_ + (name, parser))
         return (
             Either.import_name('{}.{}'.format(self._builtin_mod, name), 'Parser') /
             update

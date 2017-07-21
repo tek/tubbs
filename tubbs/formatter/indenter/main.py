@@ -12,7 +12,7 @@ from tubbs.tatsu.ast import AstElem, ast_rose_tree, RoseAstTree, Line, RoseData
 from tubbs.formatter.indenter.indent import Indent
 from tubbs.formatter.indenter.state import IndentState
 from tubbs.formatter.indenter.cond import IndentCond, NoIndent, mk_indent
-from tubbs.tatsu.indent_dsl import Parser
+from tubbs.tatsu.indenter_dsl import Parser
 from tubbs.formatter.indenter.dsl import parse_indent_expr
 
 
@@ -109,7 +109,7 @@ class DictIndenter(IndenterBase):
 class VimDictIndenter(DictIndenter, VimCallback, metaclass=VimFormatterMeta):
 
     def __init__(self, vim: NvimFacade, parser: Parser, rules: Map, conds: Map[str, Callable]) -> None:
-        sw = vim.options('shiftwidth') | 2
+        sw = vim.buffer.options('shiftwidth') | 2
         super().__init__(parser, rules, conds, sw)
 
 

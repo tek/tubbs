@@ -1,12 +1,13 @@
 from typing import Callable, Tuple
 
-from ribosome.machine import may_handle, handle, Message
+from ribosome.machine import may_handle, handle, Message, Nop
 from ribosome.machine.base import io, UnitTask
 from ribosome.machine.transition import Fatal
 from ribosome.request.base import parse_int
 
 from amino import __, L, _, Task, Either, Maybe, Right, List, Map
 from amino.util.string import snake_case
+from amino.state import EvalState
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
@@ -15,11 +16,12 @@ from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
 from tubbs.plugins.core.crawler import Crawler, Match
 from tubbs.tatsu.base import ParserBase
 from tubbs.formatter.facade import FormattingFacade, Formatted, Range
-from tubbs.formatter.base import Formatter
+from tubbs.formatter.base import Formatter, VimFormatterMeta
 from tubbs.hints.base import HintsBase
+from tubbs.env import Env
 
 
-formatter_mod = 'tubbs.formatter'
+formatters_pkg = 'tubbs.formatter'
 
 
 class CoreTransitions(TubbsTransitions):
@@ -67,13 +69,18 @@ class CoreTransitions(TubbsTransitions):
         count = self.msg.count
         return FormatRange(options=(Map(start=line, end=line + count - 1)))
 
-    @handle(Format)
-    def format(self) -> Either[str, Message]:
+    @may_handle(Format)
+    def format(self) -> EvalState[Env, Either[str, Message]]:
+        name = self.msg.parser
+        range = self.msg.range
         return (
-            (self.data.parser(self.msg.parser) & self.formatters(self.msg.parser))
-            .map2(L(self._format)(_, _, self.msg.range))
+            EvalState.modify(lambda a: a.load_parser(name) | a)
+            .flat_map(lambda a: self.formatters(name))
+            .eff(Either)
+            .flat_map(L(self._format)(name, _, range))
             .map(L(self.update_range)(_, self.msg.range))
-            .lmap(Fatal)
+            .value
+            .map(__.lmap(Fatal))
         )
 
     @property
@@ -87,35 +94,51 @@ class CoreTransitions(TubbsTransitions):
         load = lambda name: (self.data.load_parser(name) & f(name))
         return self.parser_name // load
 
-    def formatters(self, name: str) -> Either[str, List[Formatter]]:
+    def formatters(self, name: str) -> EvalState[Env, Either[str, List[Formatter]]]:
         custom = self._callbacks('formatters_{}'.format(name))
-        return self.lang_formatters(name) if custom.empty else Right(custom)
+        return self.lang_formatters(name) if custom.empty else EvalState.pure(custom, Either)
 
-    def lang_formatters(self, lang: str) -> Either[str, List[Formatter]]:
+    def lang_formatters(self, lang: str) -> EvalState[Env, Either[str, List[Formatter]]]:
         return (
             List(('Breaker', 'breaks'), ('Indenter', 'indents'))
             .map2(L(self.lang_formatter)(lang, _, _))
-            .sequence(Either)
+            .sequence(EvalState)
+            .map(__.sequence(Either))
         )
 
-    def lang_formatter(self, lang: str, name: str, tpe: str) -> Either[str, Formatter]:
+    def lang_formatter(self, lang: str, name: str, tpe: str) -> EvalState[Env, Either[str, Formatter]]:
         return (
-            (self.vim.vars.pd('{}_{}'.format(lang, tpe)) //
-             L(self.dict_formatter)(lang, name, _))
-            .o(lambda: self.builtin_formatter(lang, name))
+            EvalState.pure(self.vim.vars.pd('{}_{}'.format(lang, tpe))).eff(Either)
+            .flat_map(L(self.dict_formatter)(lang, name, _))
+            .value
+            .map(__.o(lambda: self.builtin_formatter(lang, name)))
         )
 
-    def dict_formatter(self, lang: str, name: str, rules: dict) -> Either[str, Formatter]:
-        def cons(tpe: type) -> Formatter:
-            return tpe(self.vim, tpe.convert_data(Map(rules)))  # type: ignore
-        return (
-            Either.import_name('{}.{}.main'.format(formatter_mod, snake_case(name)), 'VimDict{}'.format(name)) /
-            cons
+    # import_pvar_name_typed(Map)
+    def dict_formatter(self, lang: str, name: str, rules: dict) -> EvalState[Env, Either[str, Formatter]]:
+        def cons(tpe: VimFormatterMeta, parser: ParserBase, conds: Map[str, str]) -> Formatter:
+            return tpe(self.vim, parser, tpe.convert_data(Map(rules)), conds)
+        snake_name = snake_case(name)
+        pkg = f'{formatters_pkg}.{snake_name}'
+        conds = (
+            self.vim.import_pvar_path(f'{snake_name}_conds')
+            .o(Either.import_name(f'{pkg}.conds', 'default_conds'))
         )
+        parser_name = f'{snake_name}_dsl'
+        def load_parser(env: Env) -> Env:
+            return env.load_parser(parser_name) | env
+        def create_formatter(env: Env) -> Either[str, Formatter]:
+            formatter = Either.import_name(f'{pkg}.main', f'VimDict{name}')
+            parser = env.parser(parser_name)
+            return formatter.zip(parser, conds).map3(cons)
+        return (
+            EvalState.modify(load_parser).replace(Right(None)).eff(Either) //
+            (lambda a: EvalState.inspect(create_formatter))
+        ).value
 
     def builtin_formatter(self, lang: str, name: str) -> Either[str, Formatter]:
         return (
-            Either.import_name('{}.{}'.format(formatter_mod, lang), 'Vim{}'.format(name)) /
+            Either.import_name('{}.{}'.format(formatters_pkg, lang), 'Vim{}'.format(name)) /
             __(self.vim)
         )
 
@@ -145,9 +168,15 @@ class CoreTransitions(TubbsTransitions):
         content = self.vim.buffer.content
         return self.vim.window.line0 / (L(Crawler)(content, _, parser, hints))
 
-    def _format(self, parser: ParserBase, formatters: List[Formatter], rng: Range) -> Formatted:
+    def _format(self, name: str, formatters: List[Formatter], rng: Range) -> Formatted:
         content = self.vim.buffer.content
-        return self.formatting_facade(parser, formatters).format(content, rng)._value()
+        return (
+            EvalState.inspect(__.parser(name))
+            .eff(Either)
+            .map(L(self.formatting_facade)(_, formatters))
+            .map(__.format(content, rng)._value())
+            .value
+        )
 
     def formatting_facade(self, parser: ParserBase, formatters: List[Formatter]) -> FormattingFacade:
         return FormattingFacade(parser, formatters, self.hints(parser.name))

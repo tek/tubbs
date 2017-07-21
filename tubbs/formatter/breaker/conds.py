@@ -3,8 +3,6 @@ from typing import Callable
 from amino.tree import SubTree
 from amino import Boolean, Map
 
-from ribosome.logging import ribo_log
-
 from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.cond import pred_cond, pred_cond_f, BreakCond, Invariant
@@ -62,7 +60,7 @@ def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
     return state.after(rule)
 
 
-default_break_conds = Map(
+default_conds = Map(
     multi_line_block_for=multi_line_block_for,
     multi_line_block_parent=multi_line_block_parent,
     multi_line_block=multi_line_block,
@@ -74,4 +72,4 @@ default_break_conds = Map(
 )
 
 __all__ = ('inv', 'multi_line_block', 'sibling', 'parent_rule', 'sibling_rule', 'sibling_valid', 'after',
-           'multi_line_block_for', 'default_break_conds')
+           'multi_line_block_for', 'default_conds')

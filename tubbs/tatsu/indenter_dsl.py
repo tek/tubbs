@@ -66,30 +66,31 @@ class Parenthesized(Expr):
     pass
 
 
-class Prio(Expr):
+class Amount(Expr):
     pass
 
 
-class PrioCond(Expr):
+class AmountCond(Expr):
     pass
 
 
-class Side(Expr):
+class Range(Expr):
+    pass
+
+
+class RangeCond(Expr):
     pass
 
 
 class Top(Expr):
-
-    @property
-    def conds(self) -> List[Side]:
-        return Lists.wrap(self.sides) if isinstance(self.sides, list) else List(self.sides)
+    pass
 
 
 class Parser(BuiltinParser):
 
     @property
     def name(self) -> str:
-        return 'break_dsl'
+        return 'indenter_dsl'
 
     @property
     def left_recursion(self) -> bool:
@@ -100,8 +101,8 @@ class Parser(BuiltinParser):
 
     @property
     def semantics(self) -> bool:
-        types = [Expr, Name, Cond, OrCond, AndCond, NotCond, Parenthesized, PrioCond, LambdaExpr, Method, Top, Side,
-                 Prio, CondStrict]
+        types = [Expr, Name, Cond, OrCond, AndCond, NotCond, Parenthesized, AmountCond, LambdaExpr, Method, Range,
+                 Amount, CondStrict, Top, RangeCond]
         return ModelBuilderSemantics(types=types)
 
 

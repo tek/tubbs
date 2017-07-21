@@ -26,8 +26,7 @@ class TubbsIntegrationSpec(IntegrationCommon, ExternalIntegrationSpec):
         self._wait_for(lambda: self.vim.vars.p('started').present)
 
 
-class TubbsPluginIntegrationSpec(IntegrationCommon, PluginIntegrationSpec,
-                                 Logging):
+class TubbsPluginIntegrationSpec(IntegrationCommon, PluginIntegrationSpec, Logging):
 
     def _start_plugin(self) -> None:
         self._debug = True

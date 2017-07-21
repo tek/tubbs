@@ -1,6 +1,6 @@
 from tubbs.tatsu.scala import Parser
-from tubbs.tatsu.break_dsl import Parser as BreakParser
-from tubbs.tatsu.indent_dsl import Parser as IndentParser
+from tubbs.tatsu.breaker_dsl import Parser as BreakParser
+from tubbs.tatsu.indenter_dsl import Parser as IndentParser
 from tubbs.formatter.facade import FormattingFacade
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter

@@ -5,7 +5,7 @@ from amino.lazy import lazy
 from amino.func import dispatch
 
 from tubbs.formatter.indenter.cond import IndentCond, IndentCondOr, IndentCondAnd, Invariant
-from tubbs.tatsu.indent_dsl import (Parser, Expr, OrCond, AndCond, NotCond, Amount, Name, Cond, LambdaExpr, Range,
+from tubbs.tatsu.indenter_dsl import (Parser, Expr, OrCond, AndCond, NotCond, Amount, Name, Cond, LambdaExpr, Range,
                                     AmountCond, CondStrict, Top, RangeCond)
 from tubbs.formatter.indenter import info
 from tubbs.formatter.indenter.info import IndentAmountRange

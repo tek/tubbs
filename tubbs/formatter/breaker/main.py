@@ -17,7 +17,7 @@ from tubbs.formatter.breaker.strict import StrictBreak
 from tubbs.formatter.breaker.breaks import Breaks
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.cond import BreakCond, CondBreak, NoBreak
-from tubbs.tatsu.break_dsl import Parser
+from tubbs.tatsu.breaker_dsl import Parser
 from tubbs.formatter.breaker.dsl import parse_break_expr
 
 

@@ -11,8 +11,8 @@ inv = Invariant().amount(1)
 def sibling_indent(state: IndentState) -> Boolean:
     return state.sibling_indent
 
-default_indent_conds = Map(
+default_conds = Map(
     sibling_indent=sibling_indent,
 )
 
-__all__ = ('inv', 'sibling_indent', 'default_indent_conds')
+__all__ = ('inv', 'sibling_indent', 'default_conds')

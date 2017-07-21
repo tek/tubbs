@@ -5,7 +5,7 @@ from amino.lazy import lazy
 from amino.func import dispatch
 
 from tubbs.formatter.breaker.cond import BreakCond, BreakCondOr, BreakCondAnd, BreakCondSet
-from tubbs.tatsu.break_dsl import (Parser, Expr, OrCond, AndCond, NotCond, Prio, Name, Cond, LambdaExpr, Top, Side,
+from tubbs.tatsu.breaker_dsl import (Parser, Expr, OrCond, AndCond, NotCond, Prio, Name, Cond, LambdaExpr, Top, Side,
                                    PrioCond, CondStrict)
 from tubbs.formatter.breaker.conds import inv
 
