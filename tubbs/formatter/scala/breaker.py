@@ -27,8 +27,8 @@ class ScalaBreakRules(BreakRules):
     def block_body(self) -> BreakCond:
         return inv(0.8).before
 
-    def block_rest_stat(self) -> BreakCond:
-        return inv(0.8).before
+    def block_stat(self) -> BreakCond:
+        return (multi_line_block_parent('statBlock').prio(1.0) | inv(0.8)).before
 
     def seminl_semi(self) -> BreakCond:
         return inv(1.1).after

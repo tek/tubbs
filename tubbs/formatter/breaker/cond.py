@@ -7,15 +7,15 @@ from amino import List, Either, __
 from amino.tree import indent
 
 from tubbs.tatsu.ast import RoseAstTree
-from tubbs.formatter.breaker.strict import StrictBreak
+from tubbs.formatter.breaker.strict import Break
 from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.info import BreakInfo, before, after, BreakSide, Before
 from tubbs.formatter.breaker import info
 from tubbs.logging import Logging
 
 
-def mk_break(prio: float, node: RoseAstTree, pos: int) -> StrictBreak:
-    return StrictBreak(node=node.data, prio=prio, position=pos)
+def mk_break(prio: float, node: RoseAstTree, pos: int) -> Break:
+    return Break(node=node.data, prio=prio, position=pos)
 
 
 class BreakCond(abc.ABC, Logging):
@@ -280,8 +280,8 @@ class CondBreak(Logging):
     def pos(self, side: BreakSide) -> int:
         return self.node.startpos if isinstance(side, Before) else self.node.endpos
 
-    def brk(self, breaks: List[StrictBreak]) -> Either[str, List[StrictBreak]]:
-        def cons(prio: float, side: BreakSide) -> StrictBreak:
+    def brk(self, breaks: List[Break]) -> Either[str, List[Break]]:
+        def cons(prio: float, side: BreakSide) -> Break:
             return mk_break(prio, self.node, self.pos(side))
         state = BreakState(self.node, breaks)
         self.log.ddebug(debug_infos, self.node, self.cond, state)

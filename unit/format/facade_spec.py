@@ -1,22 +1,24 @@
 from tubbs.tatsu.scala import Parser
 from tubbs.tatsu.breaker_dsl import Parser as BreakParser
 from tubbs.tatsu.indenter_dsl import Parser as IndentParser
-from tubbs.formatter.facade import FormattingFacade
+from tubbs.formatter.facade import FormattingFacade, Range
 from tubbs.hints.scala import Hints
 from tubbs.formatter.base import Formatter
 from tubbs.formatter.indenter.main import DictIndenter
 from tubbs.formatter.breaker.main import DictBreaker
 from tubbs.formatter.scala.breaker import Breaker
 from tubbs.formatter.scala.indenter import Indenter
-from tubbs.formatter.breaker.conds import default_break_conds
-from tubbs.formatter.indenter.conds import default_indent_conds
+from tubbs.formatter.breaker.conds import default_conds as break_conds
+from tubbs.formatter.indenter.conds import default_conds as indent_conds
 
 from kallikrein.expectation import Expectation
 from kallikrein import k
-from kallikrein.matchers import contain
 import kallikrein.matchers.either  # NOQA
+from kallikrein.matchers.eval import eval_to
+from kallikrein.matchers.lines import have_lines
+from kallikrein.matchers.either import be_right
 
-from amino import List, Just, _, Map
+from amino import List, Just, _, Map, __
 from amino.test.path import load_fixture
 from amino.list import Lists
 
@@ -64,15 +66,26 @@ def_def = '''def foo = {
   }
 }'''
 
+foo_target = '''def foo = {
+  a match {
+    case a => foo.map {
+      x => 1;
+      2
+    }
+    case b => b
+    case c => c
+  }
+}'''
+
 
 class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
-    with default rules $scala_def_default
-    with custom rules in a dict $scala_def_dict
+    # with default rules $scala_def_default
+    # with custom rules in a dict $scala_def_dict
 
     break a scala val
-    with default rules $scala_val_default
+    # with default rules $scala_val_default
 
     broken apply expression with case clauses $broken_apply
     '''
@@ -101,10 +114,13 @@ class FormattingFacadeSpec:
     def default_facade(self) -> FormattingFacade:
         return self.facade(self.default_formatters)
 
-    def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
+    def format_at(self, formatters: List[Formatter], lines: List[str], range: Range, target: str) -> Expectation:
         facade = self.facade(formatters)
-        result = facade.format(lines, (9, 10))._value().lines
-        return k(result) == Lists.lines(target)
+        result = facade.format(lines, range) / __.map(_.lines)
+        return k(result).must(eval_to(be_right(have_lines(target))))
+
+    def format_scala(self, formatters: List[Formatter], lines: List[str], target: str) -> Expectation:
+        return self.format_at(formatters, lines, (9, 10), target)
 
     def scala_def(self, formatters: List[Formatter]) -> Expectation:
         return self.format_scala(formatters, self.def_lines, def_target)
@@ -136,8 +152,8 @@ class FormattingFacadeSpec:
             apply_expr_chain_app_bol='here:sibling_indent | from_here',
         )
         formatters = List(
-            DictBreaker(self.break_parser, break_rules, default_break_conds, 40),
-            DictIndenter(self.indent_parser, indent_rules, default_indent_conds, 2)
+            DictBreaker(self.break_parser, break_rules, break_conds, 40),
+            DictIndenter(self.indent_parser, indent_rules, indent_conds, 2)
         )
         return self.scala_def(formatters)
 
@@ -145,9 +161,11 @@ class FormattingFacadeSpec:
         return self.scala_val(self.default_formatters)
 
     def broken_apply(self) -> Expectation:
-        ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
-        ind = Indenter(2)
-        r = ind.format(ast)
-        return k(r.value / _.join_lines).must(contain(broken_apply))
+        # ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
+        # ind = Indenter(2)
+        # r = ind.format(ast)
+        x = 'def foo = { a match { case a => foo.map { x => 1; 2 } case b => b case c => c } }'
+        return self.format_at(self.default_formatters, List(x), (0, 1), foo_target)
+        # return k(r.value / _.join_lines).must(be_right(broken_apply))
 
 __all__ = ('FormattingFacadeSpec',)

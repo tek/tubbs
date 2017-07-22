@@ -97,7 +97,7 @@ class ParserBase(Logging, abc.ABC):
 
     def parse(self, text: str, rule: str) -> Either[str, AstElem]:
         def log_error(err: str) -> None:
-            self.log.debug(f'failed to parse `{rule}`:\n{err}')
+            self.log.debug(f'failed to parse `{rule}`:\n{repr(err)}')
         return (
             self.parser //
             L(Try)(_.parse, text, rule, semantics=self.semantics)

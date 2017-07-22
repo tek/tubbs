@@ -7,7 +7,7 @@ from ribosome.record import Record, int_field, float_field, field
 from tubbs.tatsu.ast import AstElem, RoseData, Line
 
 
-class StrictBreak(Record):
+class Break(Record):
     position = int_field()
     prio = float_field()
     node = field(RoseData)
@@ -36,4 +36,4 @@ class StrictBreak(Record):
     def ast(self) -> AstElem:
         return self.node.ast
 
-__all__ = ('StrictBreak',)
+__all__ = ('Break',)

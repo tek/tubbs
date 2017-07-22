@@ -5,12 +5,12 @@ from amino.lazy import lazy
 from amino.tree import SubTree
 
 from tubbs.tatsu.ast import RoseData, RoseAstTree
-from tubbs.formatter.breaker.strict import StrictBreak
+from tubbs.formatter.breaker.strict import Break
 
 
 class BreakState:
 
-    def __init__(self, node: RoseAstTree, breaks: List[StrictBreak]) -> None:
+    def __init__(self, node: RoseAstTree, breaks: List[Break]) -> None:
         self.node = node
         self.breaks = breaks
 
@@ -28,7 +28,7 @@ class BreakState:
         return p.parent if self.is_token else p
 
     @lazy
-    def after_breaks(self) -> List[StrictBreak]:
+    def after_breaks(self) -> List[Break]:
         return (
             self.breaks
             .filter(_.line == self.data.line)
@@ -39,7 +39,7 @@ class BreakState:
         return self.after_breaks.exists(__.match_name(name))
 
     @lazy
-    def before_breaks(self) -> List[StrictBreak]:
+    def before_breaks(self) -> List[Break]:
         return (
             self.breaks
             .filter(_.line == self.data.line)
@@ -54,7 +54,7 @@ class BreakState:
         return self.data.parent
 
     @lazy
-    def parent_breaks(self) -> List[StrictBreak]:
+    def parent_breaks(self) -> List[Break]:
         siblings = self.parent_inode.sub
         def match(node: RoseAstTree, break_node: RoseData) -> bool:
             return node.data == break_node or node.data.ast.contains(break_node.ast)
@@ -62,6 +62,12 @@ class BreakState:
             self.breaks
             .filter(lambda a: siblings.exists(L(match)(_, a.node)))
         )
+
+    def sub_breaks(self, node: RoseAstTree) -> List[Break]:
+        def loop(n: int, cur: RoseAstTree, acc: List) -> List[Break]:
+            return acc if n == 0 else cur.sub.fold_left(acc + cur.sub.drain)(lambda z, a: loop(n - 1, a, z))
+        subs = loop(3, node, List())
+        return self.breaks.filter(lambda b: subs.exists(lambda n: b.node == n.data))
 
     def sibling(self, f: Callable[[SubTree], SubTree]) -> Boolean:
         target = f(self.parent.s).e

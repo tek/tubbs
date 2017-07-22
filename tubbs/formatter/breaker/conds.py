@@ -1,7 +1,7 @@
 from typing import Callable
 
 from amino.tree import SubTree
-from amino import Boolean, Map
+from amino import Boolean, Map, _, L
 
 from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
@@ -16,23 +16,23 @@ def nel(ast: AstElem) -> bool:
     return isinstance(ast, AstList) and ast.data.length > 0
 
 
-def multi_line_node(n: RoseAstTree) -> Boolean:
-    return n.s.body.tail.e.exists(nel) or n.sub.exists(multi_line_node)
+def multi_line_node(state: BreakState, n: RoseAstTree) -> Boolean:
+    return n.s.body.tail.e.exists(nel) or n.sub.exists(L(multi_line_node)(state, _)) or state.sub_breaks(n).nonempty
 
 
 @pred_cond('multi line block sibling')
 def multi_line_block(state: BreakState) -> Boolean:
-    return multi_line_node(state.parent)
+    return multi_line_node(state, state.parent)
 
 
 @pred_cond_f('multi line block')
 def multi_line_block_for(state: BreakState, attr: Callable[[RoseAstTree], RoseAstTree]) -> Boolean:
-    return multi_line_node(attr(state.node))
+    return multi_line_node(state, attr(state.node))
 
 
 @pred_cond_f('multi line block in parent with rule')
 def multi_line_block_parent(state: BreakState, rule: str) -> Boolean:
-    return state.node.parent_with_rule(rule).exists(multi_line_node)
+    return state.node.parent_with_rule(rule).exists(L(multi_line_node)(state, _))
 
 
 @pred_cond_f('sibling break')

@@ -13,7 +13,7 @@ from ribosome.util.callback import VimCallback
 
 from tubbs.tatsu.ast import AstElem, RoseData, ast_rose_tree, RoseAstTree
 from tubbs.formatter.base import Formatter, VimFormatterMeta
-from tubbs.formatter.breaker.strict import StrictBreak
+from tubbs.formatter.breaker.strict import Break
 from tubbs.formatter.breaker.breaks import Breaks
 from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.cond import BreakCond, CondBreak, NoBreak
@@ -79,14 +79,14 @@ class BreakerBase(Formatter[BreakCond]):
             .get_or_else((breaks, List(line)))
         )
 
-    def best_break(self, breaks: List[StrictBreak], line: str, start: int) -> Either[str, StrictBreak]:
+    def best_break(self, breaks: List[Break], line: str, start: int) -> Either[str, Break]:
         '''select the break with the highest prio.
         if any forced breaks (>= 1.0) exist, use the highest one unconditionally.
         otherwise, weight the prios with the evenness of the ratio by which they split the line, scoring highest for
         0.5 split, using a gaussian with configurable variance.
         '''
         length = len(line)
-        def weighted_prio(b: StrictBreak) -> float:
+        def weighted_prio(b: Break) -> float:
             return self._split_weight((b.position - start) / length)
         return (
             breaks
@@ -104,14 +104,14 @@ class BreakerBase(Formatter[BreakCond]):
     def _split_coeff(self) -> float:
         return 2 * self.split_weight_variance
 
-    def break_line(self, breaks: Breaks, brk: StrictBreak, line: str, start: int) -> Either[str, Z]:
+    def break_line(self, breaks: Breaks, brk: Break, line: str, start: int) -> Either[str, Z]:
         def rec2(sub: Breaks, data: str, pos: int) -> Z:
             return (
                 (sub, List(data))
                 if only_ws(data) else
                 self.analyze_line(sub, data, pos)
             )
-        def rec1(brk: StrictBreak) -> List[str]:
+        def rec1(brk: Break) -> List[str]:
             pos = brk.position
             local_pos = pos - start
             self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
@@ -129,7 +129,7 @@ class BreakerBase(Formatter[BreakCond]):
             rec1
         )
 
-    def handle(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Either[str, List[CondBreak]]:
+    def handle(self, node: RoseAstTree, breaks: List[Break]) -> Either[str, List[CondBreak]]:
         handler = self.lookup_handler(node.data)
         result = handler()
         return Right(List(CondBreak(node, result)))
@@ -137,23 +137,23 @@ class BreakerBase(Formatter[BreakCond]):
     def _handler_names(self, node: RoseData, names: List[str]) -> List[str]:
         return names
 
-    def brk(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
+    def brk(self, node: RoseAstTree, breaks: List[Break]) -> Eval[Either[str, List[CondBreak]]]:
         handler = self.break_node if node.data.is_token else self.break_inode
         return handler(node, breaks)
 
-    def sub_breaks(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
+    def sub_breaks(self, node: RoseAstTree, breaks: List[Break]) -> Eval[Either[str, List[CondBreak]]]:
         return (
             node.sub.drain.traverse(L(self.brk)(_, breaks), Eval) /
             __.flat_sequence(Either).map(breaks.add)
         )
 
-    def break_inode(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
+    def break_inode(self, node: RoseAstTree, breaks: List[Break]) -> Eval[Either[str, List[CondBreak]]]:
         return (
             self.break_node(node, breaks) //
             __.flat_traverse(L(self.sub_breaks)(node, _), Eval)
         )
 
-    def break_node(self, node: RoseAstTree, breaks: List[StrictBreak]) -> Eval[Either[str, List[CondBreak]]]:
+    def break_node(self, node: RoseAstTree, breaks: List[Break]) -> Eval[Either[str, List[CondBreak]]]:
         return Eval.later(self.handle, node, breaks)
 
 

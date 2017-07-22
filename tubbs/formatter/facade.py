@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from amino import List, Either, L, _, Maybe, Eval
+from amino import List, Either, L, _, Maybe, Eval, Right, __
 
 from tubbs.logging import Logging
 from tubbs.formatter.base import Formatter
@@ -33,8 +33,10 @@ class FormattingFacade(Logging):
 
     def format(self, context: List[str], rng: Range) -> Eval[Formatted]:
         return (
-            self.parsable_range(context, rng)
-            .flat_map2(L(self.format_range)(_, context, _))
+            Eval.later(self.parsable_range, context, rng)
+            .eff(Either)
+            .flat_map2(L(self.format_range)(_, context, _) >> __.map(Right))
+            .value
         )
 
     def format_range(self, rule: str, context: List[str], rng: Range) -> Eval[Formatted]:

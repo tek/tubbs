@@ -5,19 +5,19 @@ from amino import List, L, _, Either
 from ribosome.record import Record, list_field
 
 from tubbs.formatter.breaker.cond import BreakCond, CondBreak
-from tubbs.formatter.breaker.strict import StrictBreak
+from tubbs.formatter.breaker.strict import Break
 
 
 class Breaks(Record):
-    applied = list_field(StrictBreak)
+    applied = list_field(Break)
     conds = list_field(CondBreak)
 
-    def range(self, start: int, end: int) -> Either[str, Tuple['Breaks', List[StrictBreak]]]:
+    def range(self, start: int, end: int) -> Either[str, Tuple['Breaks', List[Break]]]:
         def matches(pos: int) -> bool:
             return start < pos < end
         def cond_match(b: BreakCond) -> bool:
             return matches(b.startpos) or matches(b.endpos)
-        def cons(all: List[StrictBreak]) -> Tuple['Breaks', List[StrictBreak]]:
+        def cons(all: List[Break]) -> Tuple['Breaks', List[Break]]:
             qualified = all.filter(L(matches)(_.position))
             sub = self.set(conds=qual_cond, applied=self.applied)
             return sub, qualified
@@ -28,7 +28,7 @@ class Breaks(Record):
     def _str_extra(self) -> List[Any]:
         return List(self.conds)
 
-    def apply(self, applied: StrictBreak) -> 'Breaks':
+    def apply(self, applied: Break) -> 'Breaks':
         return self.append1.applied(applied)
 
     def reset(self, old: 'Breaks') -> 'Breaks':
