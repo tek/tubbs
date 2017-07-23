@@ -7,6 +7,7 @@ from hues import huestr
 from amino import Either, List, L, Boolean, _, __, Maybe, Map, Eval, Right, Left
 from amino.regex import Regex
 from amino.lazy import lazy
+from amino.logging import indent
 
 from ribosome.nvim import NvimFacade
 from ribosome.util.callback import VimCallback
@@ -19,6 +20,7 @@ from tubbs.formatter.breaker.rules import BreakRules
 from tubbs.formatter.breaker.cond import BreakCond, CondBreak, NoBreak
 from tubbs.tatsu.breaker_dsl import Parser
 from tubbs.formatter.breaker.dsl import parse_break_expr
+from tubbs.util.string import yellow
 
 
 def hl(data: str) -> str:
@@ -86,10 +88,13 @@ class BreakerBase(Formatter[BreakCond]):
         0.5 split, using a gaussian with configurable variance.
         '''
         length = len(line)
-        def weighted_prio(b: Break) -> float:
-            return self._split_weight((b.position - start) / length)
+        def weighted_prio(b: Break) -> Tuple[float, float]:
+            split = (b.position - start) / length
+            return split, self._split_weight(split) * b.prio
+        wps = breaks.apzip(weighted_prio)
+        self.log.ddebug(debug_weights, wps)
         return (
-            breaks.max_by(weighted_prio)
+            wps.max_by(lambda a: a[1][1]).map(_[0])
             .o(
                 breaks
                 .filter(_.prio >= 1)
@@ -204,5 +209,9 @@ class VimDictBreaker(DictBreaker, VimCallback, metaclass=VimFormatterMeta):
         tw = vim.buffer.options('textwidth') | 120
         super().__init__(parser, rules, conds, tw)
 
+
+def debug_weights(data: List[Tuple[Break, Tuple[float, float]]]) -> List[str]:
+    lines = data.map2(lambda b, sw: yellow(f'{b}: {sw[0]:.3}/{sw[1]:.3}'))
+    return indent(lines, 2).cons('Weighted breaks:').cons('')
 
 __all__ = ('Breaker', 'DictBreaker', 'VimDictBreaker')
