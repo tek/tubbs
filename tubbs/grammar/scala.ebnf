@@ -587,19 +587,15 @@ resultExpr =
 blockStatMod = 'implicit' | 'lazy';
 blockStatDef = anno:{annotation} [mod:blockStatMod] def:def;
 blockStatTemplDef = anno:{annotation} mod:{localModifier} def:implDef;
-blockStat1 =
+blockStat =
   | comment
   | import
   | blockStatDef
   | blockStatTemplDef
   | expr
   ;
-blockStat =
-  | blockStat1 eolComment
-  | blockStat1
-  ;
 blockRest = eol:eol stat:blockStat;
-blockBody = head:blockStat tail:{blockRest} [eol result:resultExpr];
+blockBody = head:blockStat tail:{blockRest} [eol:eol result:resultExpr];
 statBlock = lbrace:lbrace body:blockBody rbrace:rbrace;
 caseBlock = lbrace:lbrace body:caseClauses rbrace:rbrace;
 block =

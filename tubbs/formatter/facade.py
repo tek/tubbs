@@ -6,7 +6,7 @@ from tubbs.logging import Logging
 from tubbs.formatter.base import Formatter
 from tubbs.tatsu.base import ParserBase
 from tubbs.hints.base import HintsBase
-from tubbs.plugins.core.crawler import Crawler
+from tubbs.formatter.crawler import Crawler
 
 Range = Tuple[int, int]
 
@@ -31,7 +31,7 @@ class FormattingFacade(Logging):
         result = crawler.parsable_range
         return result.map(_.rule).zip(result.map(_.range))
 
-    def format(self, context: List[str], rng: Range) -> Eval[Formatted]:
+    def format(self, context: List[str], rng: Range) -> Eval[Either[str, Formatted]]:
         return (
             Eval.later(self.parsable_range, context, rng)
             .eff(Either)

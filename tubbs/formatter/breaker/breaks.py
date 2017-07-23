@@ -1,11 +1,18 @@
 from typing import Any, Tuple
 
-from amino import List, L, _, Either
+from hues import huestr
 
 from ribosome.record import Record, list_field
 
-from tubbs.formatter.breaker.cond import BreakCond, CondBreak
+from amino import List, Either
+from amino.logging import indent
+
+from tubbs.formatter.breaker.cond import CondBreak
 from tubbs.formatter.breaker.strict import Break
+
+
+def debug_candidates(breaks: List[Break]) -> List[str]:
+    return indent(breaks, 2).map(lambda a: huestr(a).yellow.colorized).cons('Candidates:')
 
 
 class Breaks(Record):
@@ -13,16 +20,19 @@ class Breaks(Record):
     conds = list_field(CondBreak)
 
     def range(self, start: int, end: int) -> Either[str, Tuple['Breaks', List[Break]]]:
-        def matches(pos: int) -> bool:
-            return start < pos < end
-        def cond_match(b: BreakCond) -> bool:
-            return matches(b.startpos) or matches(b.endpos)
+        def break_match(b: Break) -> bool:
+            s = 1 if b.before else 0
+            e = 1 if b.after else 0
+            return (start + s) <= b.position < (end - e)
+        def cond_match(b: CondBreak) -> bool:
+            return (start + 1) <= b.startpos < end or start < b.endpos < (end - 1)
         def cons(all: List[Break]) -> Tuple['Breaks', List[Break]]:
-            qualified = all.filter(L(matches)(_.position))
+            self.log.ddebug(debug_candidates, all)
+            qualified = all.filter(break_match)
             sub = self.set(conds=qual_cond, applied=self.applied)
             return sub, qualified
         qual_cond = self.conds.filter(cond_match)
-        return qual_cond.flat_traverse(lambda a: a.brk(self.applied), Either) / cons
+        return qual_cond.flat_traverse(lambda a: a.brk(self.applied, start, end), Either) / cons
 
     @property
     def _str_extra(self) -> List[Any]:

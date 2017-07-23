@@ -66,11 +66,14 @@ def_def = '''def foo = {
   }
 }'''
 
-foo_target = '''def foo = {
+nested_blocks = 'def foo = { a match { case a => foo.map { x => 1; 2 } case b => b case c => c } }'
+
+nested_blocks_target = '''def foo = {
   a match {
     case a => foo.map {
-      x => 1;
-      2
+      x =>
+        1;
+        2
     }
     case b => b
     case c => c
@@ -81,13 +84,14 @@ foo_target = '''def foo = {
 class FormattingFacadeSpec:
     '''formatting facade
     break a scala def
-    # with default rules $scala_def_default
-    # with custom rules in a dict $scala_def_dict
+    with default rules $scala_def_default
+    with custom rules in a dict $scala_def_dict
 
     break a scala val
-    # with default rules $scala_val_default
+    with default rules $scala_val_default
 
     broken apply expression with case clauses $broken_apply
+    multiple nested blocks on a single line $nested_blocks
     '''
 
     def setup(self) -> None:
@@ -161,11 +165,12 @@ class FormattingFacadeSpec:
         return self.scala_val(self.default_formatters)
 
     def broken_apply(self) -> Expectation:
-        # ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
-        # ind = Indenter(2)
-        # r = ind.format(ast)
-        x = 'def foo = { a match { case a => foo.map { x => 1; 2 } case b => b case c => c } }'
-        return self.format_at(self.default_formatters, List(x), (0, 1), foo_target)
-        # return k(r.value / _.join_lines).must(be_right(broken_apply))
+        ast = self.parser.parse(broken_apply, 'valVarDef').get_or_raise
+        ind = Indenter(2)
+        r = ind.format(ast)
+        return k(r.value / _.join_lines).must(be_right(broken_apply))
+
+    def nested_blocks(self) -> Expectation:
+        return self.format_at(self.default_formatters, List(nested_blocks), (0, 1), nested_blocks_target)
 
 __all__ = ('FormattingFacadeSpec',)

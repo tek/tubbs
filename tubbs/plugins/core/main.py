@@ -1,25 +1,24 @@
 from typing import Callable, Tuple
 
-from ribosome.machine import may_handle, handle, Message, Nop
+from ribosome.machine import may_handle, handle, Message
 from ribosome.machine.base import io, UnitTask
 from ribosome.machine.transition import Fatal
 from ribosome.request.base import parse_int
 
-from amino import __, L, _, Task, Either, Maybe, Right, List, Map
+from amino import __, L, _, Task, Either, Maybe, Right, List, Map, Eval, Left
 from amino.util.string import snake_case
 from amino.state import EvalState
 
 from tubbs.state import TubbsComponent, TubbsTransitions
 
-from tubbs.plugins.core.message import (StageI, AObj, Select, Format,
-                                        FormatRange, FormatAt, FormatExpr)
-from tubbs.plugins.core.crawler import Crawler, Match
+from tubbs.plugins.core.message import StageI, AObj, Select, Format, FormatRange, FormatAt, FormatExpr
+from tubbs.plugins.core.crawler import Match
 from tubbs.tatsu.base import ParserBase
 from tubbs.formatter.facade import FormattingFacade, Formatted, Range
 from tubbs.formatter.base import Formatter, VimFormatterMeta
 from tubbs.hints.base import HintsBase
 from tubbs.env import Env
-
+from tubbs.formatter.crawler import Crawler
 
 formatters_pkg = 'tubbs.formatter'
 
@@ -174,8 +173,8 @@ class CoreTransitions(TubbsTransitions):
             EvalState.inspect(__.parser(name))
             .eff(Either)
             .map(L(self.formatting_facade)(_, formatters))
-            .map(__.format(content, rng)._value())
             .value
+            .flat_map_f(lambda a: a.map(lambda b: b.format(content, rng)).value_or(lambda b: Eval.now(Left(b))))
         )
 
     def formatting_facade(self, parser: ParserBase, formatters: List[Formatter]) -> FormattingFacade:

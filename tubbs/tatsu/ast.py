@@ -60,6 +60,10 @@ class Line(Record):
     def trim(self) -> str:
         return self.text.strip()
 
+    @property
+    def range(self) -> Tuple[int, int]:
+        return self.start, self.end
+
 
 Sub = TypeVar('Sub')
 

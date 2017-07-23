@@ -4,7 +4,7 @@ from typing import Callable, Tuple, Any
 
 from hues import huestr
 
-from amino import Either, List, L, Boolean, _, __, Maybe, Map, Eval, Right
+from amino import Either, List, L, Boolean, _, __, Maybe, Map, Eval, Right, Left
 from amino.regex import Regex
 from amino.lazy import lazy
 
@@ -89,10 +89,12 @@ class BreakerBase(Formatter[BreakCond]):
         def weighted_prio(b: Break) -> float:
             return self._split_weight((b.position - start) / length)
         return (
-            breaks
-            .filter(_.prio >= 1)
-            .max_by(_.prio)
-            .o(lambda: breaks.max_by(weighted_prio))
+            breaks.max_by(weighted_prio)
+            .o(
+                breaks
+                .filter(_.prio >= 1)
+                .max_by(_.prio)
+            )
             .to_either('no breaks for {}'.format(line))
         )
 
@@ -114,7 +116,7 @@ class BreakerBase(Formatter[BreakCond]):
         def rec1(brk: Break) -> List[str]:
             pos = brk.position
             local_pos = pos - start
-            self.log.ddebug('breaking at {}, {}'.format(pos, local_pos))
+            self.log.ddebug('breaking: {}, {}'.format, brk, local_pos)
             left = line[:local_pos]
             right = line[local_pos:]
             self.log.ddebug(lambda: 'broke line into\n{}\n{}'.format(hl(left), hl(right)))
@@ -122,11 +124,10 @@ class BreakerBase(Formatter[BreakCond]):
             breaks_l, lines_l = rec2(breaks1, left, start)
             breaks_r, lines_r = rec2(breaks1.update(breaks_l), right, pos)
             return breaks_r, (lines_l + lines_r)
-        msg = 'line did not exceed tw: {}'
         return (
-            Boolean(len(line) > self.textwidth or brk.prio >= 1.0)
-            .e(msg.format(line), brk) /
-            rec1
+            Right(rec1(brk))
+            if len(line) > self.textwidth or brk.prio >= 1.0 else
+            Left(f'line did not exceed tw: {line}')
         )
 
     def handle(self, node: RoseAstTree, breaks: List[Break]) -> Either[str, List[CondBreak]]:

@@ -5,20 +5,21 @@ from hues import huestr
 
 from amino import List, Either, __
 from amino.tree import indent
+from amino.util.string import ToStr
 
 from tubbs.tatsu.ast import RoseAstTree
 from tubbs.formatter.breaker.strict import Break
 from tubbs.formatter.breaker.state import BreakState
-from tubbs.formatter.breaker.info import BreakInfo, before, after, BreakSide, Before
+from tubbs.formatter.breaker.info import BreakInfo, before, after, BreakSide
 from tubbs.formatter.breaker import info
 from tubbs.logging import Logging
 
 
-def mk_break(prio: float, node: RoseAstTree, pos: int) -> Break:
-    return Break(node=node.data, prio=prio, position=pos)
+def mk_break(prio: float, node: RoseAstTree, side: BreakSide) -> Break:
+    return Break(node=node, prio=prio, side=side)
 
 
-class BreakCond(abc.ABC, Logging):
+class BreakCond(ToStr, Logging):
 
     @abc.abstractmethod
     def info(self, state: BreakState) -> BreakInfo:
@@ -57,11 +58,9 @@ class BreakCond(abc.ABC, Logging):
     def prio(self, prio: float) -> 'BreakCondPrio':
         return BreakCondPrio(self, prio)
 
-    def __str__(self) -> str:
-        return f'{self.__class__.__name__}({self._desc})'
-
-    def __repr__(self) -> str:
-        return str(self)
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._desc)
 
 
 class SingleBreakCond(BreakCond):
@@ -147,8 +146,9 @@ class BreakCondPos(BreakCondNest):
         self.cond = cond
         self.side = side
 
-    def __str__(self) -> str:
-        return f'BreakCondPos({str(self.cond)}, {self.side})'
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(str(self.cond), self.side)
 
     def info(self, state: BreakState) -> BreakInfo:
         return self.cond.info(state).pos(self.side)
@@ -169,9 +169,6 @@ class Invariant(SingleBreakCond):
 
     def info(self, state: BreakState) -> BreakInfo:
         return info.Empty()
-
-    def __str__(self) -> str:
-        return self._desc
 
     def describe(self, state: BreakState) -> List[str]:
         return List(self._desc)
@@ -251,19 +248,19 @@ def pred_cond_f(desc: str) -> Callable[[PCF], Callable[..., BreakCond]]:
     return dec
 
 
-def debug_infos(node: RoseAstTree, cond: BreakCond, state: BreakState) -> List[str]:
-    def go() -> List[str]:
-        return List(
-            '',
-            huestr(str(node.data)).blue.colorized,
-            huestr(node.line.text.rstrip()).yellow.colorized,
-            (cond.describe(state).join_lines),
-            '',
-        )
-    return List() if not isinstance(cond, NoBreak) else go()
+def debug_infos(node: RoseAstTree, cond: BreakCond, state: BreakState, start: int, end: int) -> List[str]:
+    data = huestr(str(node.data)).blue.colorized
+    nrange = node.startpos - start, node.endpos - start
+    line = huestr(node.line.text[start:end].rstrip()).yellow.colorized
+    return List(
+        '',
+        f'{data} @ {nrange}',
+        line,
+        (cond.describe(state).join_lines),
+    )
 
 
-class CondBreak(Logging):
+class CondBreak(ToStr, Logging):
 
     def __init__(self, node: RoseAstTree, cond: BreakCond) -> None:
         self.node = node
@@ -277,14 +274,12 @@ class CondBreak(Logging):
     def endpos(self) -> int:
         return self.node.endpos
 
-    def pos(self, side: BreakSide) -> int:
-        return self.node.startpos if isinstance(side, Before) else self.node.endpos
-
-    def brk(self, breaks: List[Break]) -> Either[str, List[Break]]:
+    def brk(self, breaks: List[Break], start: int, end: int) -> Either[str, List[Break]]:
         def cons(prio: float, side: BreakSide) -> Break:
-            return mk_break(prio, self.node, self.pos(side))
+            return mk_break(prio, self.node, side)
         state = BreakState(self.node, breaks)
-        self.log.ddebug(debug_infos, self.node, self.cond, state)
+        if not isinstance(self.cond, NoBreak):
+            self.log.ddebug(debug_infos, self.node, self.cond, state, start, end)
         return (
             self.cond.infos(state)
             .filter_not(lambda a: isinstance(a, info.Skip))
@@ -292,10 +287,8 @@ class CondBreak(Logging):
             .lmap(lambda a: f'{self.cond} did not match: {a}')
         )
 
-    def __str__(self) -> str:
-        return f'CondBreak({self.node.rule}, {self.cond})'
-
-    def __repr__(self) -> str:
-        return str(self)
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.startpos, self.endpos, self.node.rule, self.cond)
 
 __all__ = ('BreakCond', 'Invariant', 'NoBreak', 'pred_cond', 'pred_cond_f', 'CondBreak')

@@ -1,7 +1,8 @@
 import abc
 from typing import Tuple
 
-from amino import Either, Left, Right
+from amino import Either, Left, Right, List, Boolean
+from amino.util.string import ToStr
 
 from tubbs.tatsu.ast import RoseAstTree
 
@@ -14,6 +15,10 @@ class BreakSide:
 
     def __str__(self) -> str:
         return self.__class__.__name__
+
+    @property
+    def before(self) -> Boolean:
+        return Boolean(isinstance(self, Before))
 
 
 class Before(BreakSide):
@@ -31,7 +36,7 @@ before = Before()
 after = After()
 
 
-class BreakInfo:
+class BreakInfo(ToStr):
 
     @abc.abstractmethod
     def prio(self, prio: float) -> 'BreakInfo':
@@ -75,6 +80,10 @@ class Empty(Incomplete):
     def prio(self, prio: float) -> BreakInfo:
         return BreakPrio(prio)
 
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._error)
+
 
 class Invalid(Incomplete):
 
@@ -91,11 +100,9 @@ class Invalid(Incomplete):
     def prio(self, prio: float) -> BreakInfo:
         return self
 
-    def __str__(self) -> str:
-        return f'Invalid({self.error})'
-
-    def __repr__(self) -> str:
-        return str(self)
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.error)
 
 
 class HasPrio:
@@ -116,8 +123,9 @@ class BreakPrio(HasPrio, Incomplete):
     def pos(self, pos: BreakSide) -> BreakInfo:
         return BreakPrioPos(self._prio, pos)
 
-    def __str__(self) -> str:
-        return f'BreakPrio({self._prio})'
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._prio)
 
 
 class HasPos:
@@ -149,8 +157,9 @@ class BreakPrioPos(HasPos, HasPrio, BreakInfo):
     def info(self) -> Either[str, Tuple[float, BreakSide]]:
         return Right((self._prio, self._pos))
 
-    def __str__(self) -> str:
-        return f'{self.__class__.__name__}({self._prio}, {self._pos})'
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self._prio, self._pos)
 
 
 class Skip(BreakPrioPos):
@@ -159,7 +168,8 @@ class Skip(BreakPrioPos):
         super().__init__(0.0, Before())
         self.desc = desc
 
-    def __str__(self) -> str:
-        return f'{self.__class__.__name__}({self.desc})'
+    @property
+    def _arg_desc(self) -> List[str]:
+        return List(self.desc)
 
 __all__ = ('BreakInfo',)

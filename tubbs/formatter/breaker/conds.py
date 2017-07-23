@@ -60,6 +60,11 @@ def after(state: BreakState, rule: str) -> Callable[[BreakState], Boolean]:
     return state.after(rule)
 
 
+@pred_cond('in block of anonymous function')
+def anon_func(state: BreakState) -> Boolean:
+    return state.parent.rule == 'anonFuncExpr'
+
+
 default_conds = Map(
     multi_line_block_for=multi_line_block_for,
     multi_line_block_parent=multi_line_block_parent,
