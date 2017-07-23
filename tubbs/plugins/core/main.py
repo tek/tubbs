@@ -12,13 +12,12 @@ from amino.state import EvalState
 from tubbs.state import TubbsComponent, TubbsTransitions
 
 from tubbs.plugins.core.message import StageI, AObj, Select, Format, FormatRange, FormatAt, FormatExpr
-from tubbs.plugins.core.crawler import Match
 from tubbs.tatsu.base import ParserBase
 from tubbs.formatter.facade import FormattingFacade, Formatted, Range
 from tubbs.formatter.base import Formatter, VimFormatterMeta
 from tubbs.hints.base import HintsBase
 from tubbs.env import Env
-from tubbs.formatter.crawler import Crawler
+from tubbs.formatter.crawler import Crawler, Match
 
 formatters_pkg = 'tubbs.formatter'
 
