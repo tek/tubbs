@@ -10,10 +10,10 @@ from toolz import dissoc, valfilter
 
 from ribosome.record import Record, str_field, int_field, field
 
-from amino import List, _, Maybe, Map, Boolean, LazyList, L, Just, Either
+from amino import List, _, Maybe, Map, Boolean, LazyList, L, Just, Either, Nothing
 from amino.tree import Node, ListNode, MapNode, LeafNode, Inode, SubTree
 from amino.list import Lists
-from amino.bi_rose_tree import RoseTree, BiRoseTree
+from amino.bi_rose_tree import RoseTree, BiRoseTree, RoseTreeRoot
 from amino.func import dispatch
 from amino.lazy_list import LazyLists
 from amino.boolean import true, false
@@ -597,10 +597,20 @@ class RoseAstTree(RoseTree[RoseData]):
     def endpos(self) -> int:
         return self.ast.endpos
 
-    def parent_with_rule(self, rule: str) -> Either[str, 'RoseAstTree']:
-        def loop(cur: RoseAstTree) -> Maybe[RoseAstTree]:
-            return Just(cur) if cur.rule == rule else loop(cur.parent)
-        return loop(self.parent).to_either(f'no parent with rule `{rule}` for {self}')
+    def parent_with_rule(self, rules: List[str], limit: int=5) -> Either[str, 'RoseAstTree']:
+        def loop(count: int, cur: RoseAstTree) -> Maybe[RoseAstTree]:
+            return (
+                Nothing
+                if count <= 0 or cur.is_root else
+                Just(cur)
+                if cur.rule in rules else
+                loop(count - 1, cur.parent)
+            )
+        return loop(limit, self.parent).to_either(lambda: f'no parent with rule in `{rules.join_comma}` for {self}')
+
+
+class RoseAstRoot(RoseTreeRoot[RoseData], RoseAstTree):
+    pass
 
 
 class RoseAstElem(BiRoseTree[RoseData], RoseAstTree):
@@ -631,7 +641,7 @@ class AstRoseTreeConverter:
 
 def ast_rose_tree(ast: AstElem[Any]) -> RoseTree[AstElem[Any]]:
     convert = AstRoseTreeConverter.convert()
-    return RoseAstTree(RoseData.cons('root', ast, RoseTree(ast, LazyLists.empty())), convert(ast))
+    return RoseAstRoot(RoseData.cons('root', ast, RoseTreeRoot(ast, LazyLists.empty())), convert(ast))
 
 __all__ = ('indent', 'Line', 'AstElem', 'AstInode', 'AstList', 'AstMap', 'AstToken', 'RoseData', 'RoseAstTree',
            'RoseAstElem', 'ast_rose_tree')

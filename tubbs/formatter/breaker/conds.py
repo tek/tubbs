@@ -2,6 +2,7 @@ from typing import Callable
 
 from amino.tree import SubTree
 from amino import Boolean, Map, _, L
+from amino.list import Lists
 
 from tubbs.tatsu.ast import AstElem, AstList, RoseAstTree
 from tubbs.formatter.breaker.state import BreakState
@@ -31,8 +32,8 @@ def multi_line_block_for(state: BreakState, attr: Callable[[RoseAstTree], RoseAs
 
 
 @pred_cond_f('multi line block in parent with rule')
-def multi_line_block_parent(state: BreakState, rule: str) -> Boolean:
-    return state.node.parent_with_rule(rule).exists(L(multi_line_node)(state, _))
+def multi_line_block_parent(state: BreakState, *rules: str) -> Boolean:
+    return state.node.parent_with_rule(Lists.wrap(rules)).exists(L(multi_line_node)(state, _))
 
 
 @pred_cond_f('sibling break')

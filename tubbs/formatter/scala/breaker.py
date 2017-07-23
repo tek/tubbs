@@ -25,7 +25,7 @@ class ScalaBreakRules(BreakRules):
         return inv(0.75).before
 
     def block_body_head(self) -> BreakCond:
-        return (anon_func.prio(0.1) | multi_line_block_parent('statBlock').prio(1.0) | inv(0.8)).before
+        return (anon_func.prio(0.1) | multi_line_block_parent('statBlock', 'caseBlock').prio(1.0) | inv(0.8)).before
 
     def block_rest_stat(self) -> BreakCond:
         return (anon_func.prio(0.1) | inv(1.0)).before
