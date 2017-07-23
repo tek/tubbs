@@ -1,8 +1,6 @@
 import abc
 from typing import Callable, Any
 
-from hues import huestr
-
 from amino import List, Either, __
 from amino.tree import indent
 from amino.util.string import ToStr
@@ -13,6 +11,7 @@ from tubbs.formatter.breaker.state import BreakState
 from tubbs.formatter.breaker.info import BreakInfo, before, after, BreakSide
 from tubbs.formatter.breaker import info
 from tubbs.logging import Logging
+from tubbs.util.string import yellow, blue
 
 
 def mk_break(prio: float, node: RoseAstTree, side: BreakSide) -> Break:
@@ -249,9 +248,9 @@ def pred_cond_f(desc: str) -> Callable[[PCF], Callable[..., BreakCond]]:
 
 
 def debug_infos(node: RoseAstTree, cond: BreakCond, state: BreakState, start: int, end: int) -> List[str]:
-    data = huestr(str(node.data)).blue.colorized
+    data = blue(node.data)
     nrange = node.startpos - start, node.endpos - start
-    line = huestr(node.line.text[start:end].rstrip()).yellow.colorized
+    line = yellow(node.line.text[start:end].rstrip())
     return List(
         '',
         f'{data} @ {nrange}',

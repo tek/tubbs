@@ -1,7 +1,5 @@
 from typing import Any, Tuple
 
-from hues import huestr
-
 from ribosome.record import Record, list_field
 
 from amino import List, Either
@@ -9,10 +7,11 @@ from amino.logging import indent
 
 from tubbs.formatter.breaker.cond import CondBreak
 from tubbs.formatter.breaker.strict import Break
+from tubbs.util.string import yellow
 
 
 def debug_candidates(breaks: List[Break]) -> List[str]:
-    return indent(breaks, 2).map(lambda a: huestr(a).yellow.colorized).cons('Candidates:')
+    return indent(breaks, 2).map(yellow).cons('Candidates:').cons('')
 
 
 class Breaks(Record):

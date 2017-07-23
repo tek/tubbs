@@ -23,7 +23,8 @@ from amino.test.path import load_fixture
 from amino.list import Lists
 
 
-def_target = '''  def fun1[TPar1 <: UB1: TC1]
+def_target = '''\
+  def fun1[TPar1 <: UB1: TC1]
   (par1a: Tpe1, par1b: Tpe1)
   (par2a: Tpe2, par2b: Tpe2)
   (implicit par3: Tpe3, par4: Tpe4) = {
@@ -37,7 +38,8 @@ def_target = '''  def fun1[TPar1 <: UB1: TC1]
         fun3(v1)
       }
     }
-  }'''
+  }\
+'''
 
 val_target = '''\
   val name =
@@ -50,7 +52,8 @@ val_target = '''\
         case (x, y) =>
           Option(x + y)
       }
-      .zip'''
+      .zip\
+'''
 
 broken_apply = '''val a =
   foo

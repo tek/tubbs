@@ -145,7 +145,7 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         break_rules = Map(
             case_block_body='before:((1.1 @ multi_line_block) | 0.91)',
             case_clause='before:((1.0 @ multi_line_block_parent(caseBlock)) | 0.9)',
-            block_body='before:((1.1 @ multi_line_block) | 0.9)',
+            block_body_head='before:((1.1 @ multi_line_block) | 0.9)',
             block_rest_stat='before:0.8',
             seminl_semi='after:1.1',
             lbrace='after:((1.0 @ multi_line_block) | 0.31)',
