@@ -1,13 +1,11 @@
 from amino import Right, Either
-from ribosome.test.integration.spec import (ExternalIntegrationSpec,
-                                            PluginIntegrationSpec)
-from ribosome.test.integration.klk import VimIntegrationKlkHelpers
+from ribosome.test.integration.klk import ExternalIntegrationKlkSpec, PluginIntegrationKlkSpec
 
 from tubbs.logging import Logging
 from tubbs.nvim_plugin import TubbsNvimPlugin
 
 
-class IntegrationCommon(VimIntegrationKlkHelpers):
+class IntegrationCommon:
 
     @property
     def _prefix(self) -> str:
@@ -18,7 +16,7 @@ class IntegrationCommon(VimIntegrationKlkHelpers):
         return Right(TubbsNvimPlugin)
 
 
-class TubbsIntegrationSpec(IntegrationCommon, ExternalIntegrationSpec):
+class TubbsIntegrationSpec(IntegrationCommon, ExternalIntegrationKlkSpec):
 
     def _start_plugin(self) -> None:
         self.plugin.start_plugin()
@@ -26,7 +24,7 @@ class TubbsIntegrationSpec(IntegrationCommon, ExternalIntegrationSpec):
         self._wait_for(lambda: self.vim.vars.p('started').present)
 
 
-class TubbsPluginIntegrationSpec(IntegrationCommon, PluginIntegrationSpec, Logging):
+class TubbsPluginIntegrationSpec(IntegrationCommon, PluginIntegrationKlkSpec, Logging):
 
     def _start_plugin(self) -> None:
         self._debug = True
