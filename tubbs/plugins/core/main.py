@@ -48,7 +48,7 @@ class CoreTransitions(TubbsTransitions):
             parse_int /
             (_ - 1)
         )
-        end = self.msg.options.get('end').o(start) // parse_int
+        end = self.msg.options.get('end').map(_ - 1).o(start) // parse_int
         load = lambda s, e: self.load_and_run(L(Format)(_, (s, e)) >> Right)
         return (
             (start & end)
@@ -57,9 +57,13 @@ class CoreTransitions(TubbsTransitions):
             .lmap(Fatal)
         )
 
-    @may_handle(FormatAt)
+    @handle(FormatAt)
     def format_at(self) -> Message:
-        return FormatRange(options=(Map(start=self.msg.line)))
+        return (
+            parse_int(self.msg.line)
+            .o(f'invalid argument for `line` parameter of `TubFormatAt:` {self.msg.line}')
+            .map(lambda line: FormatRange(options=(Map(start=line, end=line))))
+        )
 
     @may_handle(FormatExpr)
     def format_expr(self) -> Message:

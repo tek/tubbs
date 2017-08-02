@@ -11,5 +11,5 @@ FormatRange = json_message('FormatRange')
 FormatAt = json_message('FormatAt', 'line')
 FormatExpr = json_message('FormatExpr', 'line', 'count')
 
-__all__ = ('StageI', 'AObj', 'IObj', 'AObjRule', 'IObjRule', 'Select',
-           'Format', 'FormatRange', 'FormatAt', 'FormatExpr')
+__all__ = ('StageI', 'AObj', 'IObj', 'AObjRule', 'IObjRule', 'Select', 'Format', 'FormatRange', 'FormatAt',
+           'FormatExpr')
