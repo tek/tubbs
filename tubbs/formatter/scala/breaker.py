@@ -52,6 +52,12 @@ class ScalaBreakRules(BreakRules):
             inv(0.65)
         ).after
 
+    def extends(self) -> BreakCond:
+        return inv(1.0).before
+
+    def withkw(self) -> BreakCond:
+        return inv(1.0).before
+
 
 class Breaker(BreakerBase):
 

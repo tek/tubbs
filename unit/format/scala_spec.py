@@ -65,8 +65,6 @@ class ScalaFormatSpec:
     break conditionally on previous breaks $break_lookbehind
     '''
 
-    __unsafe__ = None
-
     @lazy
     def parser(self) -> Parser:
         parser = Parser()

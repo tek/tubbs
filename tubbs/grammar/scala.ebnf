@@ -197,7 +197,7 @@ annotOrRegularType =
   | annotType
   | regularType
   ;
-refinementSubtype = withkw:'with' type:annotOrRegularType;
+refinementSubtype = withkw:withkw type:annotOrRegularType;
 refinementsOnlySubtype = {refinementSubtype}+;
 refinementsWithTemplate = {subtype:refinementSubtype} templ:refinementTemplate;
 refinements =
@@ -504,7 +504,7 @@ accessModifier = ('private' | 'protected') [accessQualifier];
 accessQualifier = lbrack:lbrack (id | 'this') rbrack:rbrack;
 
 annotation = '@' regularType {argListExpr};
-constrAnnotation = '@' regularType argListExpr;
+ctorAnnotation = '@' regularType argListExpr;
 
 templateStatDef = {anno:annotation [nl:nl]} {mod:modifier} def:def;
 templateStatDcl = {anno:annotation [nl:nl]} {mod:modifier} dcl:dcl;
@@ -557,7 +557,7 @@ funDefFull = sig:funSig [nl1:nl] [colon:':' [nl2:nl] type:type] [nl3:nl]
 assign:assign [nl4:nl] rhs:expr;
 funDefUnit = sig:funSig [nl1:nl] lbrace:lbrace [rhs:blockBody]
 rbrace:rbrace;
-funDefCtor = 'this' paramClauses (assign:assign constrExpr | [nl] constrBlock);
+funDefCtor = 'this' paramClauses (assign:assign ctorExpr | [nl] ctorBlock);
 funDef1 =
   | funDefFull
   | funDefUnit
@@ -603,31 +603,52 @@ block =
   | statBlock
   ;
 
-classDef = id [typeParamClause] {constrAnnotation} [accessModifier] classParamClauses classTemplateOpt;
-traitDef = [nl] id [nl] [typeParamClause] [nl] traitTemplateOpt;
-objectDef = id:id tmpl:classTemplateOpt;
-classTemplateOpt = 'extends' classTemplate | [['extends'] template];
-traitTemplateOpt = 'extends' traitTemplate | [['extends'] template];
-classTemplate = [earlyDefs] classParents [template];
-traitTemplate = [earlyDefs] traitParents [template];
-classParents = constr {'with' annotOrRegularType};
-traitParents = annotOrRegularType {'with' annotOrRegularType};
-constr = annotOrRegularType {argListExpr};
-earlyDefs = lbrace:lbrace [earlyDef {eol earlyDef}] rbrace:rbrace [nl] 'with';
-earlyDef = {annotation [nl]} {modifier} patVarDef;
-class = casekw:[case] classkw:'class' def:classDef;
-module = casekw:[case] objectkw:'object' def:objectDef;
-trait = 'trait' traitDef;
+earlyDef = [nl1:nl] {anno:annotation [nl2:nl]} mods:{modifier} def:patVarDef;
+earlyDefs = {earlyDef}+;
+earlyDefsClause = [nl1:nl] lbrace:lbrace [defs:earlyDefs] rbrace:rbrace [nl2:nl] withkw:withkw;
+extends = [nl:nl] kw:'extends';
+withkw = [nl:nl] kw:'with';
+parentsTail = [nl:nl] withkw:withkw tpe:annotOrRegularType;
+parentCtor = tpe:annotOrRegularType argss:{argListExpr};
+
+traitParents = tpe:annotOrRegularType {tail:parentsTail};
+traitParentsClause = &(earlyDefsClause | annotOrRegularType) [early:earlyDefsClause] [parents:traitParents];
+traitTemplateFull = extendskw:extends [parents:traitParentsClause] [template:template];
+traitTemplateSimple = [extendskw:extends] template:template;
+traitTemplate =
+  | traitTemplateFull
+  | traitTemplateSimple
+  ;
+traitDef = [nl1:nl] id:id [nl2:nl] [tparams:typeParamClause] [nl3:nl] template:traitTemplate;
+trait = traitkw:'trait' def:traitDef;
+
+classParents = parentCtor:parentCtor {tail:parentsTail};
+classParentsClause = &(earlyDefsClause | annotOrRegularType) [early:earlyDefsClause] [parents:classParents];
+classTemplateFull = extendskw:extends [parents:classParentsClause] [template:template];
+classTemplateSimple = [extendskw:extends] template:template;
+classTemplate =
+  | classTemplateFull
+  | classTemplateSimple
+  ;
+classDef =
+  [nl1:nl] id:id [[nl2:nl] tparams:typeParamClause] {anno:ctorAnnotation} [ctormod:accessModifier]
+  params:classParamClauses template:classTemplate
+;
+class = [casekw:case] classkw:'class' def:classDef;
+
+objectDef = id:id tmpl:classTemplate;
+module = [casekw:case] objectkw:'object' def:objectDef;
+
 implDef =
   | class
   | module
   | trait
   ;
 
-constrExpr =
+ctorExpr =
   | selfInvocation
-  | constrBlock;
-constrBlock = '{' selfInvocation {eol blockStat} '}';
+  | ctorBlock;
+ctorBlock = '{' selfInvocation {eol blockStat} '}';
 selfInvocation = 'this' argListExpr {argListExpr};
 
 topImplDef = anno:{annotation [nl]} mod:{modifier} tmpl:implDef;
