@@ -3,7 +3,7 @@ from integration._support.base import TubbsPluginIntegrationSpec
 from amino.test.path import fixture_path
 
 from kallikrein.expectation import Expectation
-from amino import List, Path, Map
+from amino import Path, Map
 
 
 class ScalaSpec(TubbsPluginIntegrationSpec):
@@ -117,12 +117,13 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
     def format_range_def(self) -> Expectation:
         self.edit_file(self.scala_file1)
         self.json_cmd_sync('TubFormatRange', start=5, end=5)
-        return self._buffer_content(List.lines(format_range_def_target))
+        return self._buffer_content(format_range_def_target)
 
     def format_line(self) -> Expectation:
         self.edit_file(self.scala_file2)
         self.json_cmd_sync('TubFormatAt 8')
-        return self._buffer_content(List.lines(format_at_def_target))
+        self._wait(3)
+        return self._buffer_content(format_at_def_target)
 
     def setup_formatexpr(self) -> None:
         self.edit_file(self.scala_file2)
@@ -130,15 +131,15 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
 
     def formatexpr(self) -> Expectation:
         self.setup_formatexpr()
-        self.vim.window.set_cursor(9)
+        self.vim.window.set_cursor(8)
         self.vim.cmd_sync('normal gqq')
-        return self._buffer_content(List.lines(format_at_def_target))
+        return self._buffer_content(format_at_def_target)
 
     def formatexpr_multi(self) -> Expectation:
         self.setup_formatexpr()
         self.vim.window.set_cursor(9)
         self.vim.cmd_sync('normal gqj')
-        return self._buffer_content(List.lines(format_at_def_target))
+        return self._buffer_content(format_at_def_target)
 
     def dict(self) -> Expectation:
         block_rhs = '(0.3 @ (sibling_rule(_.rhs, block) & sibling_valid(_.rhs) & after(lbrace)))'
@@ -164,6 +165,6 @@ class ScalaFormatSpec(TubbsPluginIntegrationSpec):
         self.setup_formatexpr()
         self.vim.window.set_cursor(9)
         self.vim.cmd_sync('normal gqq')
-        return self._buffer_content(List.lines(format_dict_def_target))
+        return self._buffer_content(format_dict_def_target)
 
 __all__ = ('ScalaSpec', 'ScalaFormatSpec')
